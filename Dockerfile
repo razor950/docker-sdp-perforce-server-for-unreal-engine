@@ -26,7 +26,7 @@ FROM base as stage1
 COPY files_for_build/1/* /tmp
 
 # Specify the SDP version, if SDP_VERSION is empty, the latest SDP will be downloaded.
-ARG SDP_VERSION=.2023.1.29621
+ARG SDP_VERSION=.2023.2.30041
 
 # Download SDP
 RUN /bin/bash -x /tmp/setup_container.sh\
@@ -38,7 +38,7 @@ RUN /bin/bash -x /tmp/setup_container.sh\
 FROM stage1 as stage2
 
 # P4 binaries version
-ARG P4_VERSION=r23.1
+ARG P4_VERSION=r23.2
 
 # For minal usage, only p4 and p4d need to be downloaded.
 ARG P4_BIN_LIST=p4,p4d
