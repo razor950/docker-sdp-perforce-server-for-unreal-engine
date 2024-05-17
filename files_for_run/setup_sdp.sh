@@ -84,6 +84,8 @@ if [ ! -e ${P4DInstanceScript} ]; then
    sed -e "s:=adminpass:=${P4_PASSWD}:g" \
       -e "s:=servicepass:=${P4_PASSWD}:g" \
       -e "s:=DNS_name_of_master_server_for_this_instance:=${P4_MASTER_HOST}:g" \
+      -e "s/=\"example.com\"/=${P4_DOMAIN}/g" \
+      -e "s/^SSL_PREFIX=/SSL_PREFIX=${P4_SSL_PREFIX}/g" \
       ${MkdirsCfgPath} > mkdirs.${SDP_INSTANCE}.cfg
 
    chmod +x mkdirs.sh
@@ -110,6 +112,16 @@ if [ ! -e ${P4DInstanceScript} ]; then
 
    # We must start the service before run configure_new_server.sh
    /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init start
+
+   if [ $P4_SSL_PREFIX == "ssl:" ]; then
+      # Note: Automating a 'p4 trust -y' (especially with '-f') may not be appropriate
+      # in a production environment, as it defeats the purpose of the Open SSL trust
+      # mechanism.  But for our purposes here, where scripts spin up throw-away data
+      # sets for testing or training purposes, it's just dandy.
+      run "/p4/${SDP_INSTANCE}/bin/p4_${SDP_INSTANCE} -p $P4PORT trust -y -f" \
+         "Trusting the OpenSSL Cert of the server." ||\
+         bail "Failed to trust the server."
+   fi
 
    run "${P4BIN} -s info -s" "Verifying direct connection to Perforce server." ||\
       bail "Could not connect to Perforce server."
@@ -154,7 +166,14 @@ if [ ! -e ${P4DInstanceScript} ]; then
    # Setting password
    ${P4BIN} passwd -P ${P4_PASSWD} ${ADMINUSER}
    export P4PASSWD=${P4_PASSWD}
+
+   #  Fixup .p4tickets, .p4trust
+   chown perforce:perforce /p4/${SDP_INSTANCE}/.p4tickets
+   chown perforce:perforce /p4/${SDP_INSTANCE}/.p4trust
    
+   # Perform 1st live checkpoints
+   run "sudo -u perforce /p4/common/bin/live_checkpoint.sh ${SDP_INSTANCE}"
+
    # Setting security level to 3 (high)
    # This will cause existing passwords reset.
    run "${P4BIN} configure set security=3"
