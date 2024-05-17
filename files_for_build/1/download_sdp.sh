@@ -35,7 +35,9 @@ function run {
 # If SDPVersion is empty, the latest version of SDP will be downloaded.
 SDPVersion=${$SDPVersion:-}
 SDPTar="sdp.Unix${SDPVersion}.tgz"
-SDPURL="https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/${SDPTar}"
+#SDPURL="https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/${SDPTar}"
+SDPURL="https://swarm.workshop.perforce.com/downloads/guest/perforce_software/sdp/downloads/${SDPTar}"
+
 
 DownloadsDir="/usr/local/bin"
 if [[ ! -d "${DownloadsDir}" ]]; then
