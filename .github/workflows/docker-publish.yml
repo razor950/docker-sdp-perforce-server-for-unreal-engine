@@ -60,13 +60,11 @@ jobs:
           
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
-        with:         
+        with:
           context: .
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           build-args: |
             UBUNTU_VERSION=${{ matrix.ubuntu_version }}
             SDP_VERSION=${{ matrix.sdp_version }}
