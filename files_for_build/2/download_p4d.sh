@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -eu
 
 # This script uses get_helix_binaries.sh, which is downloaded from:
 # https://swarm.workshop.perforce.com/projects/perforce-software-sdp/files/main/helix_binaries/get_helix_binaries.sh

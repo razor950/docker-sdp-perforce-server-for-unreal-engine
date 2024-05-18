@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -eu
 
 #------------------------------------------------------------------------------
 # Functions msg(), dbg(), and bail().
@@ -33,10 +33,9 @@ function run {
 # https://swarm.workshop.perforce.com/projects/perforce_software-helix-installer/files/main/src/reset_sdp.sh
 
 # If SDPVersion is empty, the latest version of SDP will be downloaded.
-SDPVersion=${$SDPVersion:-}
+SDPVersion=${SDPVersion:-}
 SDPTar="sdp.Unix${SDPVersion}.tgz"
-#SDPURL="https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/${SDPTar}"
-SDPURL="https://swarm.workshop.perforce.com/downloads/guest/perforce_software/sdp/downloads/${SDPTar}"
+SDPURL="https://swarm.workshop.perforce.com/projects/perforce-software-sdp/download/downloads/${SDPTar}"
 
 
 DownloadsDir="/usr/local/bin"
@@ -45,7 +44,7 @@ if [[ ! -d "${DownloadsDir}" ]]; then
 fi
 
 cd "${DownloadsDir}" || bail "Could not cd to downloads dir: ${DownloadsDir}"
-run "curl -k -s -O ${SDPURL}" || bail "Could not get SDP tar file from [${SDPURL}]."
+run "curl -s -L -O ${SDPURL}" || bail "Could not get SDP tar file from [${SDPURL}]."
 
 # Rename file without version in file name, for easier use later on.
 mv ${SDPTar} sdp.Unix.tgz

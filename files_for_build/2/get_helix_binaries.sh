@@ -4,7 +4,7 @@
 # the Server Deployment Package (SDP), and also available online:
 # https://swarm.workshop.perforce.com/projects/perforce-software-sdp/view/main/LICENSE
 #------------------------------------------------------------------------------
-set -u
+set -eu
 
 # This script acquires Perforce Helix binaries from the Perforce FTP server.
 # For documentation, run: get_helix_binaries.sh -man
@@ -233,7 +233,7 @@ for binary in $(echo "$BinList"|tr ',' ' '); do
       fi
    fi
 
-   Cmd="curl -s -k -O $BinURL"
+   Cmd="curl -s -L -O $BinURL"
 
    if [[ "$NoOp" -eq 1 ]]; then
       msg "NoOp: Would run: $Cmd"
@@ -246,9 +246,7 @@ for binary in $(echo "$BinList"|tr ',' ' '); do
       chmod +x "$binary"
       msg "New version of $binary: $("./$binary" -V | grep Rev)"
    else
-      # Replace the '-s' silent flag with '-v' after we have had an error, to
-      # help with debugging.
-      Cmd="curl -v -k -O $BinURL"
+      Cmd="curl -v -O $BinURL"
       warnmsg "Failed to download $binary with this URL: $BinURL\\nRetrying ..."
       RetryCount+=0
 
