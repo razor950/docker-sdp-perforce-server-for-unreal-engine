@@ -27,7 +27,7 @@ declare Platform=linux26x86_64
 declare PerforceFTPBaseURL="https://ftp.perforce.com/perforce"
 declare BinURL=
 declare Cmd=
-declare DefaultHelixVersion=r24.1
+declare DefaultHelixVersion=r23.2
 declare DefaultBinList="p4 p4d p4broker p4p"
 
 function msg () { echo -e "$*"; }

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -u
+set -eu
 
 # Stop perforce service.
 function exit_script(){
