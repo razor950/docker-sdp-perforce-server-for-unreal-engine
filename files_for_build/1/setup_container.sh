@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eu
 
 # This script follows the instructions:
 # https://swarm.workshop.perforce.com/projects/perforce-software-sdp/view/main/doc/SDP_Guide.Unix.html#_manual_install

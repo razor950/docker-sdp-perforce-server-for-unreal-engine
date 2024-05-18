@@ -24,6 +24,14 @@ jobs:
       contents: read
       packages: write
 
+
+    strategy:
+      matrix:
+        include:
+        - sdp_version: "2023.2.30295"
+          helix_version: "r23.2"
+          ubuntu_version: "jammy"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -44,11 +52,24 @@ jobs:
             latest=true
             prefix=
             suffix=
+
+      - name: Set some vars
+        id: setup
+        run: |
+          echo BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") >> $GITHUB_OUTPUT
           
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
-        with:
+        with:         
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.ubuntu_version }}
+            SDP_VERSION=${{ matrix.sdp_version }}
+            P4_VERSION=${{ matrix.helix_version }}
+            VCS_REF=${{ github.sha }}
+            BUILD_DATE=${{ steps.setup.outputs.BUILD_DATE }}
