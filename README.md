@@ -32,8 +32,8 @@ Available --build-arg:
 | ARG         | default value | meaning                                                                |
 | ----------- | ------------- | ---------------------------------------------------------------------- |
 | OS_DISTRO   | jammy         | ubuntu version                                                         |
-| SDP_VERSION | .2023.1.29621 | SDP version                                                            |
-| P4_VERSION  | r23.1         | P4 binaries version                                                    |
+| SDP_VERSION | .2024.1.30385 | SDP version                                                            |
+| P4_VERSION  | r24.1         | P4 binaries version                                                    |
 | P4_BIN_LIST | p4,p4d        | Helix binaries, for minal usage, only p4 and p4d need to be downloaded |
 
 Also you can tweak the .cfg files in the "files_for_run" folder, when you build your own image.
