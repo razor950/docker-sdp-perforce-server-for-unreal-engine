@@ -29,12 +29,12 @@ docker save sdp-perforce-server-for-unreal-engine:r23.1 -o sdp-perforce-server-f
 ```
 
 Available --build-arg:
-| ARG         | default value | meaning                                                                |
-| ----------- | ------------- | ---------------------------------------------------------------------- |
-| OS_DISTRO   | jammy         | ubuntu version                                                         |
-| SDP_VERSION | .2024.1.30385 | SDP version                                                            |
-| P4_VERSION  | r24.1         | P4 binaries version                                                    |
-| P4_BIN_LIST | p4,p4d        | Helix binaries, for minal usage, only p4 and p4d need to be downloaded |
+| ARG              | default value | meaning                                                                                                                                      |
+| ---------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| UBUNTU_VERSION   | jammy         | Ubuntu version. Ensure this version is supported by Perforce. Check the official Perforce documentation for currently supported Ubuntu releases. |
+| SDP_VERSION      | .2024.1.30385 | SDP version. It's recommended to check for the latest stable version from the Perforce website and update if building a new image.             |
+| P4_VERSION       | r24.1         | P4 binaries version (Helix Core). It's recommended to check for the latest stable version from the Perforce website and update if building a new image. |
+| P4_BIN_LIST      | p4,p4d        | Helix binaries to download. For minimal usage, only `p4` (client) and `p4d` (server) are needed.                                             |
 
 Also you can tweak the .cfg files in the "files_for_run" folder, when you build your own image.
 
@@ -64,13 +64,27 @@ After the container's first setup, use [P4Admin](https://www.perforce.com/downlo
 
 ![Login as user perforce](docs/images/P4Admin_1.png)
 
-After click "OK", you must change the default password for user "perforce" (because security level is set to 3).
+After click "OK", you must change the initial password for user "perforce" (because the security level is set to 3, forcing an immediate password change).
 
-The old password is F@stSCM! by default (configured in Dockerfile: P4_PASSWD).
+**Initial Password for `perforce` user:**
+
+Previously, a default password was set via the `P4_PASSWD` environment variable in the Dockerfile. This has been changed for better security.
+
+*   **Automatic Password Generation**: If you do not set the `P4_PASSWD` environment variable when running `docker run`, a strong, random password will be automatically generated during the container's first startup.
+*   **Check Docker Logs**: You **must** check the Docker logs for a message similar to this to retrieve the generated password:
+    ```
+    -----------------------------------------------------------------------
+    IMPORTANT: The Perforce admin password is: your_generated_password_here
+    -----------------------------------------------------------------------
+    ```
+*   **First Login**: Use this generated password when logging in as `perforce` for the first time with P4Admin. You will be required to change it immediately.
+
+**Caution on setting `P4_PASSWD` manually:**
+While you *can* still set a password using `docker run -e P4_PASSWD=yourchosenpassword ...`, this is generally discouraged for security reasons. Relying on the auto-generated password is safer for most use cases. If you do set it, that password will be used instead of a random one, and you will still be required to change it on first login.
 
 ![Change default password](docs/images/P4Admin_2.png)
 
-After login, you can create new depots, groups and users.
+After providing the initial password (either auto-generated or manually set) and then changing it, you can create new depots, groups, and users.
 
 在群晖(NAS)上面如何运行，参考：[如何在群晖(NAS)上，部署一个为UnrealEngine定制的Perforce服务器](docs/HotToRunPerforceServerOnSynologyForUnrealEngine.md)
 

@@ -3,6 +3,29 @@
 set -u
 
 #------------------------------------------------------------------------------
+# Password Generation
+#------------------------------------------------------------------------------
+if [ -n "${P4_PASSWD:-}" ]; then
+  GENERATED_P4_PASSWD="${P4_PASSWD}"
+  echo "Using P4_PASSWD from environment."
+else
+  echo "P4_PASSWD not set or empty, generating a random password."
+  GENERATED_P4_PASSWD=$(openssl rand -base64 12)
+  if [ -z "${GENERATED_P4_PASSWD}" ]; then
+    # Fallback in case openssl rand fails, though highly unlikely
+    GENERATED_P4_PASSWD="FallbackPassword$(date +%s%N)"
+    echo "WARNING: openssl rand failed. Used a less secure fallback password."
+  fi
+fi
+
+echo "-----------------------------------------------------------------------"
+echo "IMPORTANT: The Perforce admin password is: ${GENERATED_P4_PASSWD}"
+echo "You will need this password for the first login to P4Admin."
+echo "The server is configured with security=3, so you will be FORCED"
+echo "to change this password immediately after logging in."
+echo "-----------------------------------------------------------------------"
+
+#------------------------------------------------------------------------------
 # Functions msg(), dbg(), and bail().
 # Sample Usage:
 #    bail "Missing something important. Aborting."
@@ -82,8 +105,8 @@ if [ ! -e ${P4DInstanceScript} ]; then
    cp -p ${MkdirsCfgPath} mkdirs.${SDP_INSTANCE}.cfg
 
    # change the password in mkdirs.cfg
-   sed -e "s/=adminpass/=${P4_PASSWD}/g" \
-      -e "s/=servicepass/=${P4_PASSWD}/g" \
+   sed -e "s/=adminpass/=${GENERATED_P4_PASSWD}/g" \
+      -e "s/=servicepass/=${GENERATED_P4_PASSWD}/g" \
       -e "s/=DNS_name_of_master_server_for_this_instance/=${P4_MASTER_HOST}/g" \
       -e "s/=\"example.com\"/=${P4_DOMAIN}/g" \
       -e "s/^SSL_PREFIX=/SSL_PREFIX=${P4_SSL_PREFIX}/g" \
@@ -165,8 +188,8 @@ if [ ! -e ${P4DInstanceScript} ]; then
    ${P4BIN} protect -i < ${CfgDir}/p4-protect.cfg
    
    # Setting password
-   ${P4BIN} passwd -P ${P4_PASSWD} ${ADMINUSER}
-   export P4PASSWD=${P4_PASSWD}
+   ${P4BIN} passwd -P ${GENERATED_P4_PASSWD} ${ADMINUSER}
+   export P4PASSWD=${GENERATED_P4_PASSWD}
 
    #  Fixup .p4tickets, .p4trust
    chown perforce:perforce /p4/${SDP_INSTANCE}/.p4tickets
