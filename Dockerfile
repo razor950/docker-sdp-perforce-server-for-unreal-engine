@@ -27,7 +27,7 @@ FROM base as stage1
 COPY files_for_build/1/* /tmp
 
 # Specify the SDP version, if SDP_VERSION is empty, the latest SDP will be downloaded.
-ARG SDP_VERSION=2024.1.30385
+ARG SDP_VERSION=2025.1.31674
 
 # Download SDP
 RUN /bin/bash -x /tmp/setup_container.sh\
