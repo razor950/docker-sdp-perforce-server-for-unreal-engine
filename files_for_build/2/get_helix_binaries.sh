@@ -4,16 +4,19 @@
 # the Server Deployment Package (SDP), and also available online:
 # https://swarm.workshop.perforce.com/projects/perforce-software-sdp/view/main/LICENSE
 #------------------------------------------------------------------------------
-set -eu
+set -u
 
 # This script acquires Perforce Helix binaries from the Perforce FTP server.
 # For documentation, run: get_helix_binaries.sh -man
+# Typical usage:
+#   cd /p4/sdp/helix_binaries
+#   ./get_helix_binaries.sh
 
 #==============================================================================
 # Declarations and Environment
 
 declare ThisScript=${0##*/}
-declare Version=1.6.1
+declare Version=1.7.4
 declare ThisUser=
 declare ThisHost=${HOSTNAME%%.*}
 declare -i Debug=${SDP_DEBUG:-0}
@@ -26,11 +29,11 @@ declare -i RetryDelay=2
 declare -i RetryOK=0
 declare -i DownloadAPIs=0
 declare HelixVersion=
-declare DefaultHelixVersion=r24.1
+declare DefaultHelixVersion=r25.1
 declare DefaultBinList="p4 p4d p4broker p4p"
 declare StageBinDir=
 declare BinList=
-declare Platform=linux26x86_64
+declare Platform=
 declare PerforceFTPBaseURL="https://ftp.perforce.com/perforce"
 declare BinURL=
 declare APIURL=
@@ -79,9 +82,9 @@ function set_platform () {
       # If the '-sbd <StageBinDir>' option was used, search for the P4*.json
       # in that directory. Otherwise, use the standard SDP location.
       if [[ -n "$StageBinDir" ]]; then
-         binDir=$StageBinDir
+         binDir="$StageBinDir"
       else
-         binDir=${SDP_INSTALL_ROOT:-/p4}/sdp/helix_binaries
+         binDir="${SDP_INSTALL_ROOT:-/p4}/sdp/helix_binaries"
       fi
 
       case "${binary:-unset}" in
@@ -159,9 +162,9 @@ osMinorVersionCompat:  $osMinorVersionCompat
 
    # shellcheck disable=SC2071
    if (( OSMajorVersion < osMajorVersionCompat )); then
-      warnmsg "OS Kernal Major Version ($OSMajorVersion) is less than Helix OS major version compatibility for $OSName, ($osMajorVersionCompat). The downloaded binary may not be suitable for this platform."
+      warnmsg "OS Kernel Major Version ($OSMajorVersion) is less than Helix OS major version compatibility for $OSName, ($osMajorVersionCompat). The downloaded binary may not be suitable for this platform."
    elif (( OSMajorVersion == osMajorVersionCompat )) && (( OSMinorVersion < osMinorVersionCompat )); then
-      warnmsg "OS Kernal Minor Version ($OSMajorVersion.$OSMinorVersion) is less than Helix OS minor version compatibility for $OSName, ($osMajorVersionCompat.$osMinorVersionCompat). The downloaded binary may not be suitable for this platform."
+      warnmsg "OS Kernel Minor Version ($OSMajorVersion.$OSMinorVersion) is less than Helix OS minor version compatibility for $OSName, ($osMajorVersionCompat.$osMinorVersionCompat). The downloaded binary may not be suitable for this platform."
    fi
 
    # Platform should look like linux26x86_64, macosx1015x86_64
@@ -242,20 +245,20 @@ DESCRIPTION:
 	This script gets the latest patch of binaries for the current major Helix
 	version.  It is intended to acquire the latest patch for an existing install,
 	or to get initial binaries for a fresh new install.  It must be run from
-	the /hxdepots/sdp/helix_binaries directory (or similar; the /hxdepots
-	directory is the default but is subject to local configuration).
+	the /p4/sdp/helix_binaries directory in order for the upgrade.sh script
+	to find the downloaded binaries.
 
 	The helix_binaries directory is used for staging binaries for later upgrade
 	with the SDP 'upgrade.sh' script (documented separately).  This helix_binaries
 	directory is used to stage binaries on the current machine, while the
-	'upgrade.sh' script updates a single SDP instance (of which there might be
-	several on a machine).
+	'upgrade.sh' script uses the downloaded binaries to upgrade a single SDP
+	instance (of which there might be several on a machine).
 
-	The helix_binaries directory may not be in the PATH. As a safety feature,
+	The helix_binaries directory must NOT be in the PATH. As a safety feature,
 	the 'verify_sdp.sh' will report an error if the 'p4d' binary is found outside
 	/p4/common/bin in the PATH. The SDP 'upgrade.sh' check uses 'verify_sdp.sh'
 	as part of its preflight checks, and will refuse to upgrade if any 'p4d' is
-	found outside /p4/common/bin.
+	found in the PATH outside /p4/common/bin.
 
 	When a newer major version of Helix binaries is needed, this script should not
 	be modified directly. Instead, get the latest version of SDP first, which will
@@ -300,6 +303,13 @@ OPTIONS:
 	Specify the Helix Version, using the short form.  The form is rYY.N, e.g. r21.2
 	to denote the 2021.2 release. The default: is $DefaultHelixVersion
 
+	The form of 'rYY.N', e.g. 'r25.1', is the default form of the version, matching
+	what is used in URLS on the Perforce Helix FTP server.  For flexibility, similar
+	forms that clearly convent the intended version are also accepted.  For example:
+
+	'-r 23.1' is implicitly converted to '-r r23.1'.
+	'-r 2023.1' is implicitly converted to ' -r r23.1'.
+
  -b <Binary1>[,<Binary2>,...]
 	Specify a comma-delimited list of Helix binaries. The default is: $DefaultBinList
 
@@ -323,7 +333,7 @@ OPTIONS:
 	FTP server for the current architecture and Helix Core version are downloaded.
 
 	Unlike binary downloads, the old versions are not checked, because file names are
-	fixed as they are with binares.
+	fixed as they are with binaries.
 
 	APIs are not needed for normal operations, and are only downloaded if requested
 	with the '-api' option. They may be useful for developing custom automation such
@@ -336,7 +346,10 @@ OPTIONS:
 	is expected and required to be /p4/sdp/helix_binaries.  Documented workflows
 	for using this script involve first cd'ing to that directory.  Using this
 	option disables the expected directory check and allows binaries to be
-	installed in any directory.
+	installed in any directory, which may be useful if this script is used
+	as a standalone script outside the SDP (e.g. for setting up test
+	environments or enabling Helix native DVCS features by installing binaries
+	into /usr/local/bin on a non-SDP machine.
 
 	This option also sets the location in which this script searches for the
 	P4*.json release list files.
@@ -354,11 +367,9 @@ HELP OPTIONS:
  -man	Display this manual page
 
 EXAMPLES:
-	Note: All examples assume the SDP is in the standard location, /hxdepots/sdp.
-
 	Example 1 - Typical Usage with no arguments:
 
-	cd /hxdepots/sdp/helix_binaries
+	cd /p4/sdp/helix_binaries
 	./get_helix_binaries.sh
 
 	This acquires the latest patch of all 4 binaries for the $DefaultHelixVersion
@@ -368,20 +379,20 @@ EXAMPLES:
 
 	Example 2 - Specify the major version:
 
-	cd /hxdepots/sdp/helix_binaries
+	cd /p4/sdp/helix_binaries
 	./get_helix_binaries.sh -r r21.2
 
 	This gets the latest patch of for the 2021.2 release of all 4 binaries.
 
-	Note: Only supported Helix binaries are guaranteed to be available from the
+	Note: Only supported binaries are guaranteed to be available from the
 	Perforce FTP server.
 
-	Note: Only the latest patch of any given binary is available from the Perforce
-	FTP server.
+	Note: Only the latest patch for any given major release is available from the
+	Perforce FTP server.
 
 	Example 3 - Get r22.2 and skip the proxy binary (p4p):
 
-	cd /hxdepots/sdp/helix_binaries
+	cd /p4/sdp/helix_binaries
 	./get_helix_binaries.sh -r r22.2 -b p4,p4d,p4broker
 
 	Example 4 - Download r23.1 binaries in a non-default directory.
@@ -407,7 +418,7 @@ DEPENDENCIES:
 	available, use the '-n' flag to see where on the Perforce FTP server the
 	files must be pulled from, and then find a way to get the files from the
 	Perforce FTP server to the correct directory on your local machine,
-	/hxdepots/sdp/helix_binaries by default.
+	/p4/sdp/helix_binaries by default.
 
 EXIT CODES:
 	An exit code of 0 indicates no errors were encountered. An
@@ -435,6 +446,7 @@ while [[ $# -gt 0 ]]; do
       (-n) NoOp=1;;
       (-d) Debug=1;;
       (-D) Debug=1; set -x;; # Debug; use 'set -x' mode.
+      (-*) usage -h "Unknown option [$1].";;
       (*) usage -h "Unknown command line fragment [$1].";;
    esac
 
@@ -450,12 +462,48 @@ set -u
 #==============================================================================
 # Command Line Verification
 
-[[ -n "$HelixVersion" ]] || HelixVersion="$DefaultHelixVersion"
+if [[ -n "$HelixVersion" ]]; then
+   # Verify values provided for the HelixVersion. By default we use the form
+   # used in URLs on the Perforce FTP server, which is where this script pulls
+   # binaries from. That form is 'rYY.N', e.g. 'r24.1' for the 2024.1 release.
+
+   # If HelixVersion looks like 'YY.N', convert to 'rYY.N'.
+   if [[ "$HelixVersion" =~ ^[0-9]{2}[.]{1}[0-9]{1}$ ]]; then
+      HelixVersion="r$HelixVersion"
+      dbg "HelixVersion value implicitly converted to $HelixVersion."
+   # If HelixVersion looks like 'YYYY.N', convert to 'rYY.N', but
+   # first check if the YYYY is valid.
+   elif [[ "$HelixVersion" =~ ^[0-9]{4}[.]{1}[0-9]{1}$ ]]; then
+      YYYY=$(echo "$HelixVersion" | cut -c 1-4)
+      case "$YYYY" in
+         199*) : ;;
+         200*) : ;;
+         201*) : ;;
+         2020) : ;;
+         2021) : ;;
+         2022) : ;;
+         2023) : ;;
+         2024) : ;;
+         *) usage -h "No Helix Core version was released in the year ($YYYY) specified with '-r $HelixVersion'.";;
+      esac
+
+      HelixVersion=r$(echo "$HelixVersion" | cut -c 3-)
+      dbg "HelixVersion value implicitly converted to $HelixVersion."
+   # If HelixVersion looks like 'rYY.N', no conversion needed.
+   elif [[ "$HelixVersion" =~ ^r[0-9]{2}[.]{1}[0-9]{1}$ ]]; then
+      :
+   else
+      usage -h "The format of the Helix Version specified with '-r $HelixVersion' is invalid. The expected form is '-r rYY.N'. For example, use '-r r23.2' to specify the 2023.2 release."
+   fi
+else
+   HelixVersion="$DefaultHelixVersion"
+fi
+
 [[ -n "$BinList" ]] || BinList="$DefaultBinList"
 
 # If '-b none' was specified and '-api' was not, give a usage error.
 [[ "$BinList" == none && "$DownloadAPIs" -eq 0 ]] && \
-   usage -h "Nothing to download; '-b none' was specified and '-api' was not. Did you meam '-b none -api'?"
+   usage -h "Nothing to download; '-b none' was specified and '-api' was not. Did you mean '-b none -api'?"
 
 # If '-b none' was specified, clear the BinList.
 [[ "$BinList" == none ]] && BinList=
@@ -463,7 +511,7 @@ set -u
 if [[ -n "$StageBinDir" ]]; then
    cd "$StageBinDir" || bail "Could not do: cd \"$StageBinDir\""
 else
-   [[ "$PWD" == *"/sdp/helix_binaries" ]] || bail "This $ThisScript script must be run from the\\n<SDPInstallRoot>/sdp/helix_binaries directory, e.g. /p4/sdp/helix_binaries.\\nThe current directory is:\\n\\n$PWD"
+   [[ "$PWD" == *"/sdp/helix_binaries" ]] || bail "This $ThisScript script is being run from directory $PWD, not /p4/sdp/helix_binaries, and '-sbd <staging_dir>' was not specified."
 fi
 
 if [[ ! "$HelixVersion" =~ ^r[0-9]{2}\.[0-9]{1}$ ]]; then
@@ -517,7 +565,7 @@ for binary in $(echo "$BinList"|tr ',' ' '); do
    if $Cmd; then
       chmod +x "$binary"
       "./$binary" -V > "$VersionCheckFile" 2>&1
-      # If we cannot get the version information from the newly downloaed binary, that is a hard error.
+      # If we cannot get the version information from the newly downloaded binary, that is a hard error.
       if grep -q Rev "$VersionCheckFile"; then
          msg "New version of $binary: $(grep Rev "$VersionCheckFile")"
       else
@@ -579,7 +627,7 @@ if [[ "$DownloadAPIs" -eq 1 ]]; then
 
          if $Cmd2; then
             tar -tzf "$apiFile" | head -1 | cut -d '/' -f 1 > "$VersionCheckFile"
-            # If we cannot get the version information from the newly downloaed API, report an error.
+            # If we cannot get the version information from the newly downloaded API, report an error.
             if grep -q p4api- "$VersionCheckFile"; then
                msg "New version of $apiFile: $(cat "$VersionCheckFile")"
             else
