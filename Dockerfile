@@ -39,7 +39,7 @@ RUN /bin/bash -x /tmp/setup_container.sh\
 FROM stage1 as stage2
 
 # P4 binaries version
-ARG P4_VERSION=r24.1
+ARG P4_VERSION=r25.1
 
 # For minal usage, only p4 and p4d need to be downloaded.
 ARG P4_BIN_LIST=p4,p4d
