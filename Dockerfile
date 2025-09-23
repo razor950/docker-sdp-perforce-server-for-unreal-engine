@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     mailutils \
     sudo \
     rsync \
+    openssl \
  && rm -rf /var/lib/apt/lists/*
 
 ### Download SDP stage
