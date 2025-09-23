@@ -106,6 +106,16 @@ if [ ! -e ${P4DInstanceScript} ]; then
          "Set Unicode (p4d -xi) for instance ${SDP_INSTANCE}." ||\
          bail "Failed to set Unicode."
    fi
+
+   # 2.5. Setup SSL BEFORE starting the server if SSL is enabled
+   if [ "${P4_SSL_PREFIX}" = "ssl:" ]; then
+      msg "Setting up SSL certificates before starting server..."
+      if ! /usr/local/bin/setup_ssl.sh; then
+         warnmsg "Failed to setup SSL certificates, but continuing..."
+      else
+         msg "SSL certificates setup completed"
+      fi
+   fi
    
    # 3. Call configure_new_server.sh
    # This part references from:
