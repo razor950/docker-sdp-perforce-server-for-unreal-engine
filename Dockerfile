@@ -5,7 +5,7 @@
 # https://www.perforce.com/manuals/p4sag/Content/P4SAG/install.linux.packages.html
 ARG UBUNTU_VERSION=jammy
 
-FROM ubuntu:${UBUNTU_VERSION} as base
+FROM ubuntu:${UBUNTU_VERSION} AS base
 
 # Create non-root user early for better security
 RUN groupadd -r perforce && useradd -r -g perforce -d /home/perforce -m -s /bin/bash perforce
@@ -36,7 +36,7 @@ RUN echo "perforce ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/perforce \
  && chmod 0440 /etc/sudoers.d/perforce
 
 ### Download SDP stage
-FROM base as stage1
+FROM base AS stage1
 
 # Copy files with specific ownership
 COPY --chown=root:root files_for_build/1/* /tmp/
@@ -44,14 +44,21 @@ COPY --chown=root:root files_for_build/1/* /tmp/
 # Specify the SDP version, if SDP_VERSION is empty, the latest SDP will be downloaded.
 ARG SDP_VERSION=2025.1.31674
 
-# Download SDP and cleanup in single layer
-RUN export SDPVersion=.${SDP_VERSION} \
+# Debug: Check what files we have and run setup step by step
+RUN echo "=== Debug: Checking copied files ===" \
+ && ls -la /tmp/ \
+ && echo "=== Debug: Running setup_container.sh ===" \
+ && chmod +x /tmp/setup_container.sh \
  && /bin/bash -x /tmp/setup_container.sh \
+ && echo "=== Debug: Running download_sdp.sh ===" \
+ && chmod +x /tmp/download_sdp.sh \
+ && export SDPVersion=.${SDP_VERSION} \
  && /bin/bash -x /tmp/download_sdp.sh \
+ && echo "=== Debug: Cleaning up ===" \
  && rm -rf /tmp/* /var/tmp/*
 
 ### Download Helix binaries stage
-FROM stage1 as stage2
+FROM stage1 AS stage2
 
 # P4 binaries version
 ARG P4_VERSION=r25.1
@@ -64,14 +71,20 @@ ARG P4_BIN_LIST=p4,p4d
 RUN mkdir -p /tmp/sdp/helix_binaries
 COPY --chown=root:root files_for_build/2/* /tmp/sdp/helix_binaries/
 
-# Download binaries and cleanup in single layer
-RUN export P4Version=${P4_VERSION} \
+# Debug: Check files and download binaries step by step
+RUN echo "=== Debug: Checking helix_binaries files ===" \
+ && ls -la /tmp/sdp/helix_binaries/ \
+ && echo "=== Debug: Making scripts executable ===" \
+ && chmod +x /tmp/sdp/helix_binaries/*.sh \
+ && echo "=== Debug: Downloading binaries ===" \
+ && export P4Version=${P4_VERSION} \
  && export P4BinList=${P4_BIN_LIST} \
  && /bin/bash -x /tmp/sdp/helix_binaries/download_p4d.sh \
+ && echo "=== Debug: Cleaning up ===" \
  && rm -rf /tmp/* /var/tmp/*
 
 ### Final stage
-FROM stage2 as final
+FROM stage2 AS final
 
 ARG VCS_REF=unspecified
 ARG BUILD_DATE=unspecified
@@ -110,8 +123,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # For first running a P4 Instance, you can change the default P4_PASSWD variable.
 # P4_PASSWD is used for init perforce instance, 
 # after "configure set security=3" is called, when you login to Perforce server for the first time, you will be asked to change the password.
+# Note: This is a default password that MUST be changed on first login due to security=3
 ENV SDP_INSTANCE=1 \
-    P4_PASSWD=F@stSCM! \
     UNICODE_SERVER=0 \
     P4_MASTER_HOST=127.0.0.1 \
     P4_DOMAIN=example.com \
@@ -119,6 +132,10 @@ ENV SDP_INSTANCE=1 \
     BACKUP_DESTINATION= \
     BACKUP_RETENTION_WEEKS=52 \
     BACKUP_SAFE_MODE=1
+
+# Set default password as build arg (can be overridden at build time)
+ARG DEFAULT_P4_PASSWD=F@stSCM!
+ENV P4_PASSWD=${DEFAULT_P4_PASSWD}
 
 # Switch to non-root user for better security
 USER perforce
