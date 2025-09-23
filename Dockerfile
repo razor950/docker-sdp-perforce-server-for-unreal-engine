@@ -43,7 +43,7 @@ FROM stage1 as stage2
 ARG P4_VERSION=r25.1
 
 # For minal usage, only p4 and p4d need to be downloaded.
-ARG P4_BIN_LIST=p4,p4d
+ARG P4_BIN_LIST=p4,p4d,p4broker
 
 COPY files_for_build/2/* /tmp/sdp/helix_binaries/
 
