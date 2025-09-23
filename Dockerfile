@@ -7,35 +7,48 @@ ARG UBUNTU_VERSION=jammy
 
 FROM ubuntu:${UBUNTU_VERSION} as base
 
+# Create non-root user early for better security
+RUN groupadd -r perforce && useradd -r -g perforce -d /home/perforce -m -s /bin/bash perforce
+
 ##  Install system prerequisites used by SDP.
 # 1. cron: for running SDP cron jobs
 # 2. curl: for downloading SDP
 # 3. file: used by verify_sdp.sh
 # 4. mailutils: SDP maintance script will call mail command
 # 5. sudo: for running commands as another user
-RUN apt-get update && apt-get install -y \
+# 6. ca-certificates: for secure downloads
+# 7. gnupg: for package verification
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     cron \
     curl \
     file \
+    gnupg \
     mailutils \
     sudo \
     rsync \
     openssl \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Configure sudo for perforce user
+RUN echo "perforce ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/perforce \
+ && chmod 0440 /etc/sudoers.d/perforce
 
 ### Download SDP stage
 FROM base as stage1
 
-COPY files_for_build/1/* /tmp
+# Copy files with specific ownership
+COPY --chown=root:root files_for_build/1/* /tmp/
 
 # Specify the SDP version, if SDP_VERSION is empty, the latest SDP will be downloaded.
 ARG SDP_VERSION=2025.1.31674
 
-# Download SDP
-RUN /bin/bash -x /tmp/setup_container.sh\
-&& export SDPVersion=.${SDP_VERSION} \
-&& /bin/bash -x /tmp/download_sdp.sh \
-&& rm -rf /tmp/*
+# Download SDP and cleanup in single layer
+RUN export SDPVersion=.${SDP_VERSION} \
+ && /bin/bash -x /tmp/setup_container.sh \
+ && /bin/bash -x /tmp/download_sdp.sh \
+ && rm -rf /tmp/* /var/tmp/*
 
 ### Download Helix binaries stage
 FROM stage1 as stage2
@@ -43,41 +56,58 @@ FROM stage1 as stage2
 # P4 binaries version
 ARG P4_VERSION=r25.1
 
-# For minal usage, only p4 and p4d need to be downloaded.
-ARG P4_BIN_LIST=p4,p4ds
+# For minimal usage, only p4 and p4d need to be downloaded.
+# Fixed typo: p4ds should be p4d
+ARG P4_BIN_LIST=p4,p4d
 
-COPY files_for_build/2/* /tmp/sdp/helix_binaries/
+# Create helix_binaries directory and copy files
+RUN mkdir -p /tmp/sdp/helix_binaries
+COPY --chown=root:root files_for_build/2/* /tmp/sdp/helix_binaries/
 
-RUN export P4Version=${P4_VERSION}\
-&& export P4BinList=${P4_BIN_LIST}\
-&& /bin/bash -x /tmp/sdp/helix_binaries/download_p4d.sh\
-&& rm -rf /tmp/*
+# Download binaries and cleanup in single layer
+RUN export P4Version=${P4_VERSION} \
+ && export P4BinList=${P4_BIN_LIST} \
+ && /bin/bash -x /tmp/sdp/helix_binaries/download_p4d.sh \
+ && rm -rf /tmp/* /var/tmp/*
 
 ### Final stage
-FROM stage2 as stage3
+FROM stage2 as final
 
 ARG VCS_REF=unspecified
 ARG BUILD_DATE=unspecified
+ARG SDP_VERSION=2025.1.31674
+ARG P4_VERSION=r25.1
+ARG UBUNTU_VERSION=jammy
 
-LABEL org.label-schema.name="sdp-perforce" \
-      org.label-schema.description="SDP Perforce for Unreal Engine" \
-      org.label-schema.build-date="${BUILD_DATE}" \
-      org.label-schema.vcs-url="https://github.com/razor950/docker-sdp-perforce-server-for-unreal-engine" \
-      org.label-schema.vcs-ref="${VCS_REF}" \
-      org.label-schema.version="sdp.${SDP_VERSION}-helix.${P4_VERSION}-${UBUNTU_VERSION}" \
-      org.label-schema.schema-version="1.0" \
-      maintainer="razor950"
+# Use standard labels instead of deprecated label-schema
+LABEL org.opencontainers.image.title="SDP Perforce for Unreal Engine" \
+      org.opencontainers.image.description="Docker perforce server using SDP, configured for Unreal Engine" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="https://github.com/zhaojunmeng/docker-sdp-perforce-server-for-unreal-engine" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="sdp.${SDP_VERSION}-helix.${P4_VERSION}-${UBUNTU_VERSION}" \
+      org.opencontainers.image.vendor="zhaojunmeng" \
+      org.opencontainers.image.licenses="MIT"
 
 # Port for perforce server
 EXPOSE 1666
 
-# The meaning of each volumn, see:
+# The meaning of each volume, see:
 # https://swarm.workshop.perforce.com/projects/perforce-software-sdp/view/main/doc/SDP_Guide.Unix.html#_volume_layout_and_hardware
-VOLUME [ "/hxmetadata", "/hxdepots", "/hxlogs", "/p4" ]
+VOLUME ["/hxmetadata", "/hxdepots", "/hxlogs", "/p4"]
 
-COPY --chmod=0755 files_for_run/* /usr/local/bin/
+# Copy runtime files with proper permissions
+COPY --chmod=0755 --chown=root:root files_for_run/* /usr/local/bin/
 
-# For first running a P4 Instance，you can change the default P4_PASSWD variable.
+# Create necessary directories with proper ownership
+RUN mkdir -p /hxmetadata /hxdepots /hxlogs /p4 \
+ && chown -R perforce:perforce /hxmetadata /hxdepots /hxlogs /p4
+
+# Health check to ensure Perforce is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status || exit 1
+
+# For first running a P4 Instance, you can change the default P4_PASSWD variable.
 # P4_PASSWD is used for init perforce instance, 
 # after "configure set security=3" is called, when you login to Perforce server for the first time, you will be asked to change the password.
 ENV SDP_INSTANCE=1 \
@@ -87,6 +117,10 @@ ENV SDP_INSTANCE=1 \
     P4_DOMAIN=example.com \
     P4_SSL_PREFIX= \
     BACKUP_DESTINATION= \
-    BACKUP_RETENTION_WEEKS=52
+    BACKUP_RETENTION_WEEKS=52 \
+    BACKUP_SAFE_MODE=1
+
+# Switch to non-root user for better security
+USER perforce
 
 ENTRYPOINT ["/usr/local/bin/docker_entry.sh"]
