@@ -124,7 +124,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # P4_PASSWD is used for init perforce instance, 
 # after "configure set security=3" is called, when you login to Perforce server for the first time, you will be asked to change the password.
 # Note: This is a default password that MUST be changed on first login due to security=3
+# For first running a P4 Instance, you can change the default P4_PASSWD variable.
+# P4_PASSWD is used for init perforce instance, 
+# after "configure set security=3" is called, when you login to Perforce server for the first time, you will be asked to change the password.
 ENV SDP_INSTANCE=1 \
+    P4_PASSWD=F@stSCM! \
     UNICODE_SERVER=0 \
     P4_MASTER_HOST=127.0.0.1 \
     P4_DOMAIN=example.com \
@@ -132,11 +136,7 @@ ENV SDP_INSTANCE=1 \
     BACKUP_DESTINATION= \
     BACKUP_RETENTION_WEEKS=52 \
     BACKUP_SAFE_MODE=1
-
-# Set default password as build arg (can be overridden at build time)
-ARG DEFAULT_P4_PASSWD=F@stSCM!
-ENV P4_PASSWD=${DEFAULT_P4_PASSWD}
-
+    
 # Switch to non-root user for better security
 USER perforce
 
