@@ -18,6 +18,16 @@ if ! bash /usr/local/bin/setup_sdp.sh; then
   exit 1
 fi
 
+# Setup backup cron job if BACKUP_DESTINATION is configured
+if [[ -n "${BACKUP_DESTINATION:-}" ]]; then
+  echo "Setting up backup cron job..."
+  if ! bash /usr/local/bin/setup_backup_cron.sh; then
+    echo "Warning: Failed to set up backup cron job, but continuing startup..." >&2
+  fi
+else
+  echo "BACKUP_DESTINATION not set, skipping backup setup"
+fi
+
 # Start perforce service.
 if ! /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init start; then
   echo "Failed to start Perforce service" >&2

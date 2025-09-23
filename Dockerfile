@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     file \
     mailutils \
     sudo \
+    rsync \
  && rm -rf /var/lib/apt/lists/*
 
 ### Download SDP stage
@@ -78,6 +79,13 @@ COPY --chmod=0755 files_for_run/* /usr/local/bin/
 # For first running a P4 Instance，you can change the default P4_PASSWD variable.
 # P4_PASSWD is used for init perforce instance, 
 # after "configure set security=3" is called, when you login to Perforce server for the first time, you will be asked to change the password.
-ENV SDP_INSTANCE=1 P4_PASSWD=F@stSCM! UNICODE_SERVER=1 P4_MASTER_HOST=127.0.0.1 P4_DOMAIN=example.com P4_SSL_PREFIX=
+ENV SDP_INSTANCE=1 \
+    P4_PASSWD=F@stSCM! \
+    UNICODE_SERVER=0 \
+    P4_MASTER_HOST=127.0.0.1 \
+    P4_DOMAIN=example.com \
+    P4_SSL_PREFIX= \
+    BACKUP_DESTINATION= \
+    BACKUP_RETENTION_WEEKS=52
 
 ENTRYPOINT ["/usr/local/bin/docker_entry.sh"]
