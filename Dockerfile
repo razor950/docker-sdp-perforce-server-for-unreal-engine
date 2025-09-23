@@ -72,14 +72,12 @@ RUN mkdir -p /tmp/sdp/helix_binaries
 COPY --chown=root:root files_for_build/2/* /tmp/sdp/helix_binaries/
 
 # Debug: Check files and download binaries step by step
-RUN echo "=== Debug: Checking helix_binaries files ===" \
+ RUN echo "=== Debug: Checking helix_binaries files ===" \
  && ls -la /tmp/sdp/helix_binaries/ \
- && echo "=== Debug: Making scripts executable ===" \
- && chmod +x /tmp/sdp/helix_binaries/*.sh \
  && echo "=== Debug: Downloading binaries ===" \
  && export P4Version=${P4_VERSION} \
  && export P4BinList=${P4_BIN_LIST} \
- && /bin/bash -x /tmp/sdp/helix_binaries/download_p4d.sh \
+ && /bin/bash -ex /tmp/sdp/helix_binaries/download_p4d.sh; echo "Exit code: $?" \
  && echo "=== Debug: Cleaning up ===" \
  && rm -rf /tmp/* /var/tmp/*
 
@@ -136,7 +134,7 @@ ENV SDP_INSTANCE=1 \
     BACKUP_DESTINATION= \
     BACKUP_RETENTION_WEEKS=52 \
     BACKUP_SAFE_MODE=1
-    
+
 # Switch to non-root user for better security
 USER perforce
 
