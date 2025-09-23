@@ -69,17 +69,14 @@ ARG P4_BIN_LIST=p4,p4d
 
 # Create helix_binaries directory and copy files
 RUN mkdir -p /tmp/sdp/helix_binaries
+
 COPY --chown=root:root files_for_build/2/* /tmp/sdp/helix_binaries/
 
 # Debug: Check files and download binaries step by step
- RUN echo "=== Debug: Checking helix_binaries files ===" \
- && ls -la /tmp/sdp/helix_binaries/ \
- && echo "=== Debug: Downloading binaries ===" \
- && export P4Version=${P4_VERSION} \
- && export P4BinList=${P4_BIN_LIST} \
- && /bin/bash -ex /tmp/sdp/helix_binaries/download_p4d.sh; echo "Exit code: $?" \
- && echo "=== Debug: Cleaning up ===" \
- && rm -rf /tmp/* /var/tmp/*
+RUN export P4Version=${P4_VERSION}\
+&& export P4BinList=${P4_BIN_LIST}\
+&& /bin/bash -x /tmp/sdp/helix_binaries/download_p4d.sh\
+&& rm -rf /tmp/*
 
 ### Final stage
 FROM stage2 AS final
