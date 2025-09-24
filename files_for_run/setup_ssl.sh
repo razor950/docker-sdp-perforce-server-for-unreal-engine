@@ -26,6 +26,7 @@ msg "Setting up SSL for Perforce instance ${SDP_INSTANCE}"
 
 # Load SDP env (defines P4ROOT, P4PORT, P4SSLDIR, etc.)
 source /p4/common/bin/p4_vars "${SDP_INSTANCE}" || bail "Failed to source P4 env"
+runuser -u perforce -- bash -lc 'source /p4/common/bin/p4_vars 1; p4 set'
 
 # Use the official SSL dir from env, not a hard-coded path
 SSL_DIR="${P4SSLDIR:-/p4/ssl}"
@@ -126,10 +127,9 @@ EOF
   msg "✅ Self-signed SSL certificate generated successfully"
 
   # Secure perms again (p4d -Gc usually does this, but be explicit)
-  chown perforce:perforce "$SSL_DIR"/{certificate.txt,privatekey.txt} 2>/dev/null || true
-  chmod 600 "$SSL_DIR/privatekey.txt" 2>/dev/null || true
-  chmod 644 "$SSL_DIR/certificate.txt" 2>/dev/null || true
-  chmod 700 "$SSL_DIR" || true
+  chown perforce:perforce "$P4SSLDIR"/{privatekey.txt,certificate.txt} 2>/dev/null || true
+  chmod 600 "$P4SSLDIR/privatekey.txt" 2>/dev/null || true
+  chmod 644 "$P4SSLDIR/certificate.txt" 2>/dev/null || true
 
   # Display cert info (optional)
   if command -v openssl >/dev/null 2>&1 && [[ -f "$SSL_DIR/certificate.txt" ]]; then
