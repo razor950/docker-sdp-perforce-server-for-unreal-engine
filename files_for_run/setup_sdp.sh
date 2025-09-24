@@ -222,6 +222,9 @@ else
    # Even for existing instances, ensure critical configurables are set
    msg "Checking essential configurables for existing instance..."
    
+   # Source the environment
+   source /p4/common/bin/p4_vars ${SDP_INSTANCE}
+
    if [ "${P4_SSL_PREFIX}" = "ssl:" ]; then
       msg "Setting up SSL certificates before starting server..."
       if ! /usr/local/bin/setup_ssl.sh; then
@@ -230,9 +233,6 @@ else
          msg "SSL certificates setup completed"
       fi
    fi
-
-   # Source the environment
-   source /p4/common/bin/p4_vars ${SDP_INSTANCE}
 
    # Check if server is running
    # Ensure p4d is running so 'p4 configure' cannot silently fail
