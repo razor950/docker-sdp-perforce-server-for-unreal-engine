@@ -55,11 +55,22 @@ exit_script() {
 # Trap common termination signals
 trap exit_script SIGTERM SIGINT SIGHUP
 
+
+SETUP_COMPLETE_MARKER="/p4/.sdp_setup_complete"
+
 # --- Setup SDP instance
-echo "Setting up SDP instance..."
-if ! bash /usr/local/bin/setup_sdp.sh; then
-  echo "Failed to set up SDP instance" >&2
-  exit 1
+if [[ -f "$SETUP_COMPLETE_MARKER" ]]; then
+  echo "SDP instance already configured. Skipping setup."
+else
+  echo "Setting up SDP instance..."
+  if bash /usr/local/bin/setup_sdp.sh; then
+    echo "SDP setup completed successfully"
+    # Create marker file to indicate setup is complete
+    touch "$SETUP_COMPLETE_MARKER"
+  else
+    echo "Failed to set up SDP instance" >&2
+    exit 1
+  fi
 fi
 
 # --- Optional backup cron job
