@@ -107,7 +107,7 @@ if [ ! -e ${P4DInstanceScript} ]; then
    fi
 
    # 2.5. Setup SSL BEFORE starting the server if SSL is enabled
-   if [ "${P4_SSL_PREFIX}" = "ssl:" ]; then
+   if [[ "${P4PORT:-}" == ssl:* || "${P4_SSL_PREFIX:-}" == "ssl:" ]]; then
       msg "Setting up SSL certificates before starting server..."
       if ! /usr/local/bin/setup_ssl.sh; then
          warnmsg "Failed to setup SSL certificates, but continuing..."
@@ -225,7 +225,8 @@ else
    # Source the environment
    source /p4/common/bin/p4_vars ${SDP_INSTANCE}
 
-   if [ "${P4_SSL_PREFIX}" = "ssl:" ]; then
+   # Run SSL setup if either the env says ssl: or the server’s P4PORT is ssl:
+   if [[ "${P4PORT:-}" == ssl:* || "${P4_SSL_PREFIX:-}" == "ssl:" ]]; then
       msg "Setting up SSL certificates before starting server..."
       if ! /usr/local/bin/setup_ssl.sh; then
          warnmsg "Failed to setup SSL certificates, but continuing..."
@@ -237,9 +238,12 @@ else
    # Check if server is running
    # Ensure p4d is running so 'p4 configure' cannot silently fail
    NEED_STOP=0
-   if ! /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status > /dev/null 2>&1; then
+   if ! /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status >/dev/null 2>&1; then
       msg "p4d not running; starting temporarily to apply configurables."
-      /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init start
+      if ! /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init start; then
+         errmsg "p4d failed to start; check /p4/${SDP_INSTANCE}/logs/log and SSL perms if using ssl:"
+         exit 1
+      fi
       NEED_STOP=1
    fi
 
