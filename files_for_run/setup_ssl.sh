@@ -114,11 +114,13 @@ EOF
 
   msg "Using p4d binary: $P4D_BIN"
 
-  # Prefer running as the perforce user; fall back if sudo is missing
-  if command -v sudo >/dev/null 2>&1; then
-    sudo -u perforce "$P4D_BIN" -r "$P4ROOT" -Gc
+  # Run as 'perforce' and PRESERVE/PASS P4SSLDIR
+  if command -v runuser >/dev/null 2>&1; then
+    runuser -u perforce -- env P4SSLDIR="$SSL_DIR" "$P4D_BIN" -r "$P4ROOT" -Gc
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo -u perforce env P4SSLDIR="$SSL_DIR" "$P4D_BIN" -r "$P4ROOT" -Gc
   else
-    su -s /bin/bash - perforce -c "\"$P4D_BIN\" -r \"$P4ROOT\" -Gc"
+    su -s /bin/bash - perforce -c "env P4SSLDIR='$SSL_DIR' '$P4D_BIN' -r '$P4ROOT' -Gc"
   fi
 
   msg "✅ Self-signed SSL certificate generated successfully"
