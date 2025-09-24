@@ -7,9 +7,6 @@ ARG UBUNTU_VERSION=jammy
 
 FROM ubuntu:${UBUNTU_VERSION} AS base
 
-# Create non-root user early for better security
-RUN groupadd -r perforce && useradd -r -g perforce -d /home/perforce -m -s /bin/bash perforce
-
 ##  Install system prerequisites used by SDP.
 # 1. cron: for running SDP cron jobs
 # 2. curl: for downloading SDP
@@ -30,10 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Configure sudo for perforce user
-RUN echo "perforce ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/perforce \
- && chmod 0440 /etc/sudoers.d/perforce
 
 ### Download SDP stage
 FROM base AS stage1
@@ -108,8 +101,12 @@ VOLUME ["/hxmetadata", "/hxdepots", "/hxlogs", "/p4"]
 COPY --chmod=0755 --chown=root:root files_for_run/* /usr/local/bin/
 
 # Create necessary directories with proper ownership
-RUN mkdir -p /hxmetadata /hxdepots /hxlogs /p4 \
- && chown -R perforce:perforce /hxmetadata /hxdepots /hxlogs /p4
+# Note: perforce user will be created by setup_container.sh, so we use root here
+RUN mkdir -p /hxmetadata /hxdepots /hxlogs /p4
+
+# Configure sudo for perforce user (after user is created by setup_container.sh)
+RUN echo "perforce ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/perforce \
+ && chmod 0440 /etc/sudoers.d/perforce
 
 # Health check to ensure Perforce is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
@@ -119,9 +116,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # P4_PASSWD is used for init perforce instance, 
 # after "configure set security=3" is called, when you login to Perforce server for the first time, you will be asked to change the password.
 # Note: This is a default password that MUST be changed on first login due to security=3
-# For first running a P4 Instance, you can change the default P4_PASSWD variable.
-# P4_PASSWD is used for init perforce instance, 
-# after "configure set security=3" is called, when you login to Perforce server for the first time, you will be asked to change the password.
 ENV SDP_INSTANCE=1 \
     P4_PASSWD=F@stSCM! \
     UNICODE_SERVER=0 \
@@ -132,7 +126,8 @@ ENV SDP_INSTANCE=1 \
     BACKUP_RETENTION_WEEKS=52 \
     BACKUP_SAFE_MODE=1
 
-# Switch to non-root user for better security
-USER perforce
+# Note: We cannot switch to perforce user here since it doesn't exist yet
+# The user will be created when the container starts via setup_container.sh
+# USER perforce
 
 ENTRYPOINT ["/usr/local/bin/docker_entry.sh"]
