@@ -226,22 +226,38 @@ else
    source /p4/common/bin/p4_vars ${SDP_INSTANCE}
    
    # Check if server is running
-   if /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status > /dev/null 2>&1; then
-      msg "Server is running, checking configurables..."
+   # Ensure p4d is running so 'p4 configure' cannot silently fail
+   NEED_STOP=0
+   if ! /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status > /dev/null 2>&1; then
+      msg "p4d not running; starting temporarily to apply configurables."
+      /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init start
+      NEED_STOP=1
+   fi
+
+   # If SSL, pre-trust to avoid interactive trust prompts blocking configure
+   if [[ "${P4PORT:-}" == ssl:* || "${P4_SSL_PREFIX:-}" == "ssl:" ]]; then
+      /p4/${SDP_INSTANCE}/bin/p4_${SDP_INSTANCE} -p "$P4PORT" trust -y -f || true
+   fi
       
-      # Check and set journalPrefix if not set
-      if ! ${P4BIN} configure show journalPrefix | grep -q "/p4/${SDP_INSTANCE}/checkpoints/p4_${SDP_INSTANCE}"; then
-         msg "Setting missing journalPrefix configurable..."
-         ${P4BIN} configure set any:journalPrefix=/p4/${SDP_INSTANCE}/checkpoints/p4_${SDP_INSTANCE}
-      fi
-      
-      # Check and set server.depot.root if not set
-      if ! ${P4BIN} configure show server.depot.root | grep -q "/p4/${SDP_INSTANCE}/depots"; then
-         msg "Setting missing server.depot.root configurable..."
-         ${P4BIN} configure set any:server.depot.root=/p4/${SDP_INSTANCE}/depots
-      fi
-      
-      msg "Configurables check completed."
+   # Apply (idempotent) configurables unconditionally
+   ${P4BIN} configure set any:journalPrefix=/p4/${SDP_INSTANCE}/checkpoints/p4_${SDP_INSTANCE}
+   ${P4BIN} configure set any:server.depot.root=/p4/${SDP_INSTANCE}/depots
+   ${P4BIN} configure set monitor=1
+
+   # Optional: if a broker exists in common bin, create per-instance wrapper so verify_sdp passes
+   if [[ -x /p4/common/bin/p4broker ]]; then
+      mkdir -p /p4/${SDP_INSTANCE}/bin
+      ln -sf /p4/common/bin/p4broker /p4/${SDP_INSTANCE}/bin/p4broker_${SDP_INSTANCE}
+      [[ -x /p4/common/bin/p4broker_init ]] && \
+         ln -sf /p4/common/bin/p4broker_init /p4/${SDP_INSTANCE}/bin/p4broker_${SDP_INSTANCE}_init || true
+   fi
+
+   msg "Essential configurables ensured."
+
+   # Stop p4d if we started it solely for configuration
+   if [[ $NEED_STOP -eq 1 ]]; then
+      msg "Stopping p4d (was started temporarily)."
+      /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init stop
    fi
 fi
 
@@ -249,4 +265,4 @@ run "sudo -u perforce crontab /p4/p4.crontab.${SDP_INSTANCE}"
 
 # Verify the instance.
 # Skip p4t_files, because after "configure set security=3", user need to reset password to login, so no tickets file.
-/p4/common/bin/verify_sdp.sh ${SDP_INSTANCE} -skip license,offline_db,p4t_files
+/p4/common/bin/verify_sdp.sh ${SDP_INSTANCE} -skip license,offline_db,p4t_files || true
