@@ -324,16 +324,6 @@ else
    # Source the environment
    source /p4/common/bin/p4_vars ${SDP_INSTANCE}
 
-   # Run SSL setup if either the env says ssl: or the server’s P4PORT is ssl:
-   if [[ "${P4PORT:-}" == ssl:* || "${P4_SSL_PREFIX:-}" == "ssl:" ]]; then
-      msg "Setting up SSL certificates before starting server..."
-      if ! /usr/local/bin/setup_ssl.sh; then
-         warnmsg "Failed to setup SSL certificates, but continuing..."
-      else
-         msg "SSL certificates setup completed"
-      fi
-   fi
-
    # Check if server is running
    # Ensure p4d is running so 'p4 configure' cannot silently fail
    NEED_STOP=0
