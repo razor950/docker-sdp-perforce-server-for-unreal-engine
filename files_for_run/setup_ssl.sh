@@ -54,11 +54,11 @@ if [[ -f "$CUSTOM_CERT" && -f "$CUSTOM_KEY" ]]; then
     # Set CRITICAL permissions for existing certificates
     sudo chown perforce:perforce "$CUSTOM_CERT" "$CUSTOM_KEY"
     sudo chmod 600 "$CUSTOM_KEY"      # Private key must be 600
-    sudo chmod 644 "$CUSTOM_CERT"     # Certificate can be 644
+    sudo chmod 600 "$CUSTOM_CERT"     # Certificate can be 600
     
     if [[ -f "$SSL_CONFIG" ]]; then
         sudo chown perforce:perforce "$SSL_CONFIG"
-        sudo chmod 644 "$SSL_CONFIG"
+        sudo chmod 600 "$SSL_CONFIG"
         msg "  Config file: $SSL_CONFIG"
     fi
     
@@ -136,7 +136,7 @@ CERT_GEN_SCRIPT
                 if [[ "$ssl_file" == "privatekey.txt" ]]; then
                     sudo chmod 600 "$SSL_DIR/$ssl_file"  # Private key must be 600
                 else
-                    sudo chmod 644 "$SSL_DIR/$ssl_file"  # Certificate can be 644
+                    sudo chmod 600 "$SSL_DIR/$ssl_file"  # Certificate can be 644
                 fi
                 msg "Set permissions on $ssl_file: $(ls -l "$SSL_DIR/$ssl_file")"
             else
@@ -187,8 +187,8 @@ for ssl_file in "${REQUIRED_FILES[@]}"; do
         if [[ "$ssl_file" == "privatekey.txt" && "$file_perms" != "600" ]]; then
             errmsg "Wrong permissions on $file_path: $file_perms (should be 600)"
             SSL_FILES_OK=0
-        elif [[ "$ssl_file" == "certificate.txt" && "$file_perms" != "644" ]]; then
-            warnmsg "Unusual permissions on $file_path: $file_perms (expected 644, but this may be OK)"
+        elif [[ "$ssl_file" == "certificate.txt" && "$file_perms" != "600" ]]; then
+            errmsg "Wrong permissions on $file_path: $file_perms (should be 600)"
         fi
     fi
 done
