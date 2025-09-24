@@ -1,4 +1,3 @@
-
 #!/bin/bash
 set -u
 
@@ -163,6 +162,31 @@ if [ ! -e ${P4DInstanceScript} ]; then
       "Applying SDP configurables." ||\
       bail "Failed to set SDP configurables. Aborting."
 
+   # IMPORTANT: Set critical configurables that might have been missed
+   msg "Setting essential SDP configurables..."
+   
+   # Set journalPrefix - required for numbered journal rotation
+   run "${P4BIN} configure set any:journalPrefix=/p4/${SDP_INSTANCE}/checkpoints/p4_${SDP_INSTANCE}" \
+      "Setting journalPrefix configurable"
+   
+   # Set server.depot.root - required for depot file storage
+   run "${P4BIN} configure set any:server.depot.root=/p4/${SDP_INSTANCE}/depots" \
+      "Setting server.depot.root configurable"
+   
+   # Set additional recommended configurables
+   run "${P4BIN} configure set monitor=1" \
+      "Enabling monitor"
+   
+   # Set server description
+   run "${P4BIN} configure set any:description='SDP Perforce Server for Unreal Engine'" \
+      "Setting server description"
+   
+   # Verify the configurables were set
+   msg "Verifying essential configurables:"
+   ${P4BIN} configure show journalPrefix
+   ${P4BIN} configure show server.depot.root
+   ${P4BIN} configure show monitor
+
    # This part references configure-helix-p4d.sh, see
    # https://www.perforce.com/manuals/p4sag/Content/P4SAG/install.linux.packages.configure.html
    ADMINUSER=perforce
@@ -194,6 +218,31 @@ if [ ! -e ${P4DInstanceScript} ]; then
 else
    msg "Skip exiting instance configuring:"
    run "cat ${P4DInstanceScript}"
+   
+   # Even for existing instances, ensure critical configurables are set
+   msg "Checking essential configurables for existing instance..."
+   
+   # Source the environment
+   source /p4/common/bin/p4_vars ${SDP_INSTANCE}
+   
+   # Check if server is running
+   if /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status > /dev/null 2>&1; then
+      msg "Server is running, checking configurables..."
+      
+      # Check and set journalPrefix if not set
+      if ! ${P4BIN} configure show journalPrefix | grep -q "/p4/${SDP_INSTANCE}/checkpoints/p4_${SDP_INSTANCE}"; then
+         msg "Setting missing journalPrefix configurable..."
+         ${P4BIN} configure set any:journalPrefix=/p4/${SDP_INSTANCE}/checkpoints/p4_${SDP_INSTANCE}
+      fi
+      
+      # Check and set server.depot.root if not set
+      if ! ${P4BIN} configure show server.depot.root | grep -q "/p4/${SDP_INSTANCE}/depots"; then
+         msg "Setting missing server.depot.root configurable..."
+         ${P4BIN} configure set any:server.depot.root=/p4/${SDP_INSTANCE}/depots
+      fi
+      
+      msg "Configurables check completed."
+   fi
 fi
 
 run "sudo -u perforce crontab /p4/p4.crontab.${SDP_INSTANCE}"
