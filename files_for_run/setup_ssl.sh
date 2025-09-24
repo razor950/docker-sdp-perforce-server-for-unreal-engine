@@ -29,12 +29,11 @@ source /p4/common/bin/p4_vars "${SDP_INSTANCE}" || bail "Failed to source P4 env
 
 # Use the official SSL dir from env, not a hard-coded path
 SSL_DIR="${P4SSLDIR:-/p4/ssl}"
-umask 077
-mkdir -p "$SSL_DIR"
+umask 077; install -d -m 700 -o perforce -g perforce "$SSL_DIR"
 
 # Ensure secure ownership/perms on the directory BEFORE anything else
-chown -R perforce:perforce "$SSL_DIR" || true
-chmod 700 "$SSL_DIR" || true
+#chown -R perforce:perforce "$SSL_DIR" || true
+#chmod 700 "$SSL_DIR" || true
 
 CUSTOM_CERT="${SSL_DIR}/certificate.txt"
 CUSTOM_KEY="${SSL_DIR}/privatekey.txt"

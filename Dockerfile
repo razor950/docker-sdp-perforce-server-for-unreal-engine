@@ -58,7 +58,7 @@ ARG P4_VERSION=r25.1
 
 # For minimal usage, only p4 and p4d need to be downloaded.
 # Fixed typo: p4ds should be p4d
-ARG P4_BIN_LIST=p4,p4d
+ARG P4_BIN_LIST=p4,p4d,p4broker,p4p
 
 # Create helix_binaries directory and copy files
 RUN mkdir -p /tmp/sdp/helix_binaries
