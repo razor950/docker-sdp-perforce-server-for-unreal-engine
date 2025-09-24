@@ -67,30 +67,20 @@ else
 
   cat > "$SSL_CONFIG" <<EOF
 # SSL Certificate Configuration for Perforce
-[ req ]
-default_bits = 2048
-prompt = no
-distinguished_name = req_distinguished_name
-req_extensions = v3_req
+C = US
+ST = FL
+L = Miami
+O = Perforce Autogen Cert
+OU = IT Department
+CN = ${P4_MASTER_HOST:-localhost}
 
-[ req_distinguished_name ]
-C=US
-ST=State
-L=City
-O=Organization
-OU=IT Department
-CN=${P4_MASTER_HOST:-localhost}
-emailAddress=admin@${P4_DOMAIN:-example.com}
+# EX: number of days from today for certificate expiration
+# (default: 730, e.g. 2 years)
+EX = 3650
 
-[ v3_req ]
-keyUsage = keyEncipherment, dataEncipherment
-extendedKeyUsage = serverAuth
-subjectAltName = @alt_names
-
-[ alt_names ]
-DNS.1 = ${P4_MASTER_HOST:-localhost}
-DNS.2 = localhost
-IP.1  = 127.0.0.1
+# UNITS: unit multiplier for expiration (defaults to "days")
+# Valid values: "secs", "mins", "hours"
+UNITS = days
 EOF
 
   chown perforce:perforce "$SSL_CONFIG"
