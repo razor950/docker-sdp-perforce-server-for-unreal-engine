@@ -62,6 +62,105 @@ else
    cat ${SDPVersionFile}
 fi
 
+robust_p4d_stop() {
+    local instance=${1:-1}
+    local timeout=${2:-15}
+    
+    msg "Attempting to stop p4d instance $instance (timeout: ${timeout}s)..."
+    
+    # Method 1: Try the official init script first
+    if /p4/${instance}/bin/p4d_${instance}_init stop; then
+        msg "Init script stop command executed"
+    else
+        warnmsg "Init script stop returned non-zero exit code"
+    fi
+    
+    # Method 2: Find and kill p4d processes directly
+    local pids=""
+    local attempts=0
+    while [[ $attempts -lt $timeout ]]; do
+        # Find p4d processes for this instance
+        pids=$(pgrep -f "p4d_${instance}.*--daemonsafe" 2>/dev/null || true)
+        
+        if [[ -z "$pids" ]]; then
+            msg "✅ p4d instance $instance stopped successfully"
+            return 0
+        fi
+        
+        msg "Found p4d processes: $pids (attempt $((attempts+1))/$timeout)"
+        
+        if [[ $attempts -eq 0 ]]; then
+            # First attempt: SIGTERM (graceful)
+            echo "$pids" | xargs -r kill -TERM 2>/dev/null || true
+            msg "Sent SIGTERM to p4d processes"
+        elif [[ $attempts -eq $((timeout-5)) ]]; then
+            # Near timeout: SIGKILL (forceful) 
+            echo "$pids" | xargs -r kill -KILL 2>/dev/null || true
+            msg "Sent SIGKILL to p4d processes"
+        fi
+        
+        sleep 1
+        attempts=$((attempts+1))
+    done
+    
+    # Final check after timeout
+    pids=$(pgrep -f "p4d_${instance}.*--daemonsafe" 2>/dev/null || true)
+    if [[ -n "$pids" ]]; then
+        errmsg "❌ Failed to stop p4d processes after ${timeout}s: $pids"
+        
+        # Last resort: nuclear option
+        msg "Attempting final SIGKILL..."
+        echo "$pids" | xargs -r kill -9 2>/dev/null || true
+        sleep 2
+        
+        # Check if it worked
+        pids=$(pgrep -f "p4d_${instance}.*--daemonsafe" 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            errmsg "❌ CRITICAL: Cannot stop p4d processes: $pids"
+            return 1
+        else
+            msg "✅ p4d stopped with SIGKILL"
+        fi
+    else
+        msg "✅ p4d instance $instance stopped successfully"
+    fi
+    
+    # Method 3: Clean up any leftover pid files
+    local pidfiles=(
+        "/p4/${instance}/tmp/p4d.pid"
+        "/p4/${instance}/logs/p4d.pid" 
+        "/p4/${instance}/p4d.pid"
+    )
+    
+    for pidfile in "${pidfiles[@]}"; do
+        if [[ -f "$pidfile" ]]; then
+            msg "Removing stale pid file: $pidfile"
+            rm -f "$pidfile" || true
+        fi
+    done
+    
+    # Method 4: Check if port is still in use
+    if command -v ss >/dev/null 2>&1; then
+        local port_check=$(ss -tlnp | grep ":1666 " || true)
+    elif command -v netstat >/dev/null 2>&1; then
+        local port_check=$(netstat -tlnp | grep ":1666 " || true)
+    else
+        local port_check=""
+    fi
+    
+    if [[ -n "$port_check" ]]; then
+        warnmsg "Port 1666 still appears to be in use: $port_check"
+        # Extract PID from netstat/ss output and kill it
+        local port_pid=$(echo "$port_check" | grep -o '[0-9]\+/p4d' | cut -d'/' -f1 | head -1)
+        if [[ -n "$port_pid" ]]; then
+            msg "Killing process holding port 1666: PID $port_pid"
+            kill -9 "$port_pid" 2>/dev/null || true
+        fi
+    fi
+    
+    return 0
+}
+
 # Check if the P4 Instance has configured.
 P4DInstanceScript=/p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}
 msg "Check ${P4DInstanceScript} existance."
@@ -269,8 +368,7 @@ else
 
    # Stop p4d if we started it solely for configuration
    if [[ $NEED_STOP -eq 1 ]]; then
-      msg "Stopping p4d (was started temporarily)."
-      /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init stop
+      robust_p4d_stop "${SDP_INSTANCE}" 20
    fi
 fi
 

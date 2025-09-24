@@ -56,6 +56,7 @@ exit_script() {
 trap exit_script SIGTERM SIGINT SIGHUP
 
 # --- Setup SDP instance
+echo "Setting up SDP instance..."
 if ! bash /usr/local/bin/setup_sdp.sh; then
   echo "Failed to set up SDP instance" >&2
   exit 1
@@ -71,13 +72,39 @@ else
   echo "BACKUP_DESTINATION not set, skipping backup setup"
 fi
 
-# --- Start p4d
+# --- Start p4d for normal operation
+echo "Starting Perforce service for normal operation..."
 if ! /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init start; then
   echo "Failed to start Perforce service" >&2
   exit 1
 fi
 
-echo "Perforce service started. Entering sleep mode."
+# --- Verify p4d is running
+sleep 3
+if /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status; then
+  echo "✅ Perforce service is running successfully"
+  echo ""
+  echo "🔗 Connection Details:"
+  echo "   Server URL: ssl:$(hostname -i):1666 (internal)"
+  echo "   External URL: ssl:your-nas-ip:1666"
+  echo "   Default User: perforce"
+  echo "   Default Password: F@stSCM! (change on first login)"
+  echo ""
+  echo "📋 Clients need to trust the SSL certificate:"
+  echo "   p4 trust -y"
+  echo ""
+  echo "🔐 SSL Fingerprint for verification:"
+  if [[ -f /p4/ssl/certificate.txt ]]; then
+    sudo -u perforce openssl x509 -in /p4/ssl/certificate.txt -fingerprint -sha256 -noout 2>/dev/null | cut -d'=' -f2 || echo "   Could not extract fingerprint"
+  fi
+else
+  echo "❌ Perforce service failed to start properly"
+  exit 1
+fi
+
+echo ""
+echo "Perforce service started successfully. Container ready."
+echo "Entering sleep mode to keep container running..."
 
 # keep PID 1 alive but responsive to traps
 sleep infinity & SLEEP_PID=$!
