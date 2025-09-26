@@ -109,8 +109,8 @@ RUN echo "perforce ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/perforce \
  && chmod 0440 /etc/sudoers.d/perforce
 
 # Health check to ensure Perforce is running
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status || exit 1
+#HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+#  CMD /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init status || exit 1
 
 # For first running a P4 Instance, you can change the default P4_PASSWD variable.
 # P4_PASSWD is used for init perforce instance, 
@@ -119,7 +119,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 ENV SDP_INSTANCE=1 \
     P4_PASSWD=F@stSCM! \
     UNICODE_SERVER=0 \
-    P4_MASTER_HOST=localhost \
+    P4_MASTER_HOST=127.0.0.1 \
     P4_DOMAIN=example.com \
     P4_SSL_PREFIX= \
     BACKUP_DESTINATION= \
