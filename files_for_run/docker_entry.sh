@@ -40,6 +40,10 @@ else
   echo "BACKUP_DESTINATION not set, skipping backup setup"
 fi
 
+# --- Start cron service
+echo "Starting cron service..."
+service cron start
+
 # --- Start p4d for normal operation
 echo "Starting Perforce service for normal operation..."
 if ! /p4/${SDP_INSTANCE}/bin/p4d_${SDP_INSTANCE}_init start; then

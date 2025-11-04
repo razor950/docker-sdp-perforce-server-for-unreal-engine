@@ -105,8 +105,7 @@ fi
 msg "Updating latest checkpoint..."
 
 CHECKPOINT_DIR="/p4/${SDP_INSTANCE}/checkpoints"
-LATEST_CHECKPOINT=$(find "${CHECKPOINT_DIR}" -name "checkpoint.${SDP_INSTANCE}.*" -type f | sort | tail -1)
-
+LATEST_CHECKPOINT=$(find "${CHECKPOINT_DIR}" -name "p4_${SDP_INSTANCE}.ckp.*" -type f | grep -v ".md5$" | sort | tail -1)
 if [[ -n "$LATEST_CHECKPOINT" && -f "$LATEST_CHECKPOINT" ]]; then
     # Remove old checkpoints from backup (keep only latest)
     rm -f "${BACKUP_LATEST}/checkpoints/checkpoint.${SDP_INSTANCE}."*
@@ -133,8 +132,12 @@ msg "Syncing journal files..."
 JOURNAL_DIR="/p4/${SDP_INSTANCE}/journals"
 if [[ -d "$JOURNAL_DIR" ]]; then
     # Use rsync to incrementally sync journal files
-    rsync -av --delete "${JOURNAL_DIR}/" "${BACKUP_LATEST}/journals/" || warnmsg "Failed to sync journal files"
+    rsync -av --delete "${JOURNAL_DIR}/" "${BACKUP_LATEST}/journals/" || warnmsg "Failed to sync journal files from ${JOURNAL_DIR}"
     msg "Synced journal files from ${JOURNAL_DIR}"
+
+    # Also sync journal files that might be placed in the checkpoint directory
+    rsync -av --delete --include='*.jnl.*' --exclude='*' "${CHECKPOINT_DIR}/" "${BACKUP_LATEST}/journals/" || warnmsg "Failed to sync journal files from ${CHECKPOINT_DIR}"
+    msg "Synced journal files from ${CHECKPOINT_DIR}"
 else
     warnmsg "Journal directory not found: ${JOURNAL_DIR}"
 fi
