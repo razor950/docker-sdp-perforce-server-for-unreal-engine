@@ -3,7 +3,7 @@ set -eu
 
 #------------------------------------------------------------------------------
 # Perforce SDP Backup Script - Efficient Incremental Version
-# 
+#
 # This script creates an efficient incremental backup of a Perforce server:
 # - Latest checkpoint and journals (truly incremental)
 # - Depot files (rsync incremental - only changed files)
@@ -40,10 +40,10 @@ trap cleanup SIGINT
 
 # Configuration
 SDP_INSTANCE=${SDP_INSTANCE:-1}
-BACKUP_DESTINATION=${BACKUP_DESTINATION:-}
+BACKUP_DESTINATION=${BACKUP_DESTINATION:-/backup}
 BACKUP_RETENTION_WEEKS=${BACKUP_RETENTION_WEEKS:-4}
 MONTHLY_SNAPSHOTS=${MONTHLY_SNAPSHOTS:-3}
-SAFE_MODE=${BACKUP_SAFE_MODE:-1}  # 1 = safer backups, 0 = aggressive cleanup
+SAFE_MODE=${BACKUP_SAFE_MODE:-0}  # 1 = safer backups, 0 = aggressive cleanup
 
 # Backup lock file to prevent concurrent runs
 LOCK_FILE="/tmp/p4_backup_${SDP_INSTANCE}.lock"
@@ -60,8 +60,8 @@ if [[ -f "$LOCK_FILE" ]]; then
 fi
 
 # Create lock file
-echo $ > "$LOCK_FILE" || bail "Cannot create backup lock file: $LOCK_FILE"
-msg "Created backup lock file: $LOCK_FILE (PID: $)"
+echo $$ > "$LOCK_FILE" || bail "Cannot create backup lock file: $LOCK_FILE"
+msg "Created backup lock file: $LOCK_FILE (PID: $$)"
 
 # Validate environment
 [[ -n "$BACKUP_DESTINATION" ]] || bail "BACKUP_DESTINATION environment variable must be set"
@@ -83,64 +83,51 @@ msg "Backup destination: ${BACKUP_DESTINATION}"
 mkdir -p "${BACKUP_LATEST}"
 mkdir -p "${BACKUP_SNAPSHOTS}"
 mkdir -p "${BACKUP_LATEST}/checkpoints"
-mkdir -p "${BACKUP_LATEST}/journals" 
+mkdir -p "${BACKUP_LATEST}/journals"
 mkdir -p "${BACKUP_LATEST}/depot"
 mkdir -p "${BACKUP_LATEST}/logs"
 
 #------------------------------------------------------------------------------
-# Step 1: Create a new checkpoint
+# Step 1: Verify daily_checkpoint.sh has already run
 #------------------------------------------------------------------------------
-msg "Creating new checkpoint..."
-
-# Run live checkpoint (this is safe while server is running)
-if ! sudo -u perforce /p4/common/bin/live_checkpoint.sh "${SDP_INSTANCE}"; then
-    errmsg "Failed to create checkpoint"
-else
-    msg "Checkpoint created successfully"
-fi
-
-#------------------------------------------------------------------------------
-# Step 2: Update latest checkpoint
-#------------------------------------------------------------------------------
-msg "Updating latest checkpoint..."
+msg "Checking for existing checkpoint created by daily_checkpoint.sh..."
 
 CHECKPOINT_DIR="/p4/${SDP_INSTANCE}/checkpoints"
-LATEST_CHECKPOINT=$(find "${CHECKPOINT_DIR}" -name "p4_${SDP_INSTANCE}.ckp.*" -type f | grep -v ".md5$" | sort | tail -1)
-if [[ -n "$LATEST_CHECKPOINT" && -f "$LATEST_CHECKPOINT" ]]; then
-    # Remove old checkpoints from backup (keep only latest)
-    rm -f "${BACKUP_LATEST}/checkpoints/checkpoint.${SDP_INSTANCE}."*
-    
-    cp "$LATEST_CHECKPOINT" "${BACKUP_LATEST}/checkpoints/" || bail "Failed to copy checkpoint"
-    msg "Updated checkpoint: $(basename "$LATEST_CHECKPOINT")"
-    
-    # Also copy the compressed version if it exists
-    CHECKPOINT_GZ="${LATEST_CHECKPOINT}.gz"
-    if [[ -f "$CHECKPOINT_GZ" ]]; then
-        rm -f "${BACKUP_LATEST}/checkpoints/checkpoint.${SDP_INSTANCE}."*.gz
-        cp "$CHECKPOINT_GZ" "${BACKUP_LATEST}/checkpoints/" || warnmsg "Failed to copy compressed checkpoint"
-        msg "Updated compressed checkpoint: $(basename "$CHECKPOINT_GZ")"
-    fi
-else
-    bail "No checkpoint files found in ${CHECKPOINT_DIR}"
+LATEST_CHECKPOINT=$(ls "${CHECKPOINT_DIR}"/p4_${SDP_INSTANCE}.ckp.*.gz 2>/dev/null | sort | tail -1)
+
+if [[ -z "$LATEST_CHECKPOINT" ]]; then
+    bail "No checkpoint found in ${CHECKPOINT_DIR}. Ensure daily_checkpoint.sh ran successfully before this backup."
 fi
+
+# Check checkpoint is recent (within last 25 hours)
+CHECKPOINT_AGE=$(( $(date +%s) - $(stat -c %Y "$LATEST_CHECKPOINT") ))
+if [[ $CHECKPOINT_AGE -gt 90000 ]]; then
+    warnmsg "Latest checkpoint is older than 25 hours (${CHECKPOINT_AGE}s). daily_checkpoint.sh may not have run."
+else
+    msg "Checkpoint is recent (${CHECKPOINT_AGE}s old): $(basename "$LATEST_CHECKPOINT")"
+fi
+
+#------------------------------------------------------------------------------
+# Step 2: Copy latest checkpoint to backup
+#------------------------------------------------------------------------------
+msg "Copying latest checkpoint to backup..."
+
+rm -f "${BACKUP_LATEST}/checkpoints/"*
+cp "$LATEST_CHECKPOINT" "${BACKUP_LATEST}/checkpoints/" || bail "Failed to copy checkpoint"
+LATEST_MD5="${LATEST_CHECKPOINT%.gz}.md5"
+[[ -f "$LATEST_MD5" ]] && cp "$LATEST_MD5" "${BACKUP_LATEST}/checkpoints/" || true
+msg "Copied checkpoint: $(basename "$LATEST_CHECKPOINT")"
 
 #------------------------------------------------------------------------------
 # Step 3: Sync journal files (incremental)
 #------------------------------------------------------------------------------
 msg "Syncing journal files..."
 
-JOURNAL_DIR="/p4/${SDP_INSTANCE}/journals"
-if [[ -d "$JOURNAL_DIR" ]]; then
-    # Use rsync to incrementally sync journal files
-    rsync -av --delete "${JOURNAL_DIR}/" "${BACKUP_LATEST}/journals/" || warnmsg "Failed to sync journal files from ${JOURNAL_DIR}"
-    msg "Synced journal files from ${JOURNAL_DIR}"
-
-    # Also sync journal files that might be placed in the checkpoint directory
-    rsync -av --delete --include='*.jnl.*' --exclude='*' "${CHECKPOINT_DIR}/" "${BACKUP_LATEST}/journals/" || warnmsg "Failed to sync journal files from ${CHECKPOINT_DIR}"
-    msg "Synced journal files from ${CHECKPOINT_DIR}"
-else
-    warnmsg "Journal directory not found: ${JOURNAL_DIR}"
-fi
+# Sync all journal files from checkpoints dir (where SDP stores them)
+rsync -av --include="p4_${SDP_INSTANCE}.jnl.*" --exclude="*" \
+    "${CHECKPOINT_DIR}/" "${BACKUP_LATEST}/journals/" \
+    || warnmsg "Failed to sync journal files from ${CHECKPOINT_DIR}"
+msg "Synced journal files from ${CHECKPOINT_DIR}"
 
 # Copy the active journal
 ACTIVE_JOURNAL="${P4JOURNAL}"
@@ -157,9 +144,9 @@ msg "Incrementally syncing depot files (this will be fast after the first run)..
 DEPOT_DIR="/hxdepots/p4/${SDP_INSTANCE}/depots"
 if [[ -d "$DEPOT_DIR" ]]; then
     # Check if source depot directory has content
-    DEPOT_FILE_COUNT=$(find "$DEPOT_DIR" -type f | wc -l)
+    DEPOT_FILE_COUNT=$(ls -1R "$DEPOT_DIR" 2>/dev/null | grep -c '^'  || echo 0)
     msg "Source depot contains $DEPOT_FILE_COUNT files"
-    
+
     if [[ $DEPOT_FILE_COUNT -eq 0 ]]; then
         warnmsg "Source depot directory is empty! Skipping depot sync to prevent data loss."
         warnmsg "If this is intentional, set BACKUP_SAFE_MODE=0 to allow empty depot sync."
@@ -173,14 +160,14 @@ if [[ -d "$DEPOT_DIR" ]]; then
         # Use rsync for truly incremental copying - only changed files
         # Removed --delete flag for safety unless in aggressive mode
         START_TIME=$(date +%s)
-        
+
         if [[ $SAFE_MODE -eq 0 ]]; then
             msg "SAFE_MODE=0: Using aggressive sync with --delete"
             rsync -av --delete --progress "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" || bail "Failed to incrementally sync depot files"
         else
             msg "SAFE_MODE=1: Using safe sync without --delete"
             rsync -av --progress "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" || bail "Failed to incrementally sync depot files"
-            
+
             # Optional: Show files that would be deleted but weren't
             if [[ -d "${BACKUP_LATEST}/depot" ]]; then
                 ORPHANED_FILES=$(rsync -avn --delete "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" | grep "^deleting " | wc -l)
@@ -189,11 +176,11 @@ if [[ -d "$DEPOT_DIR" ]]; then
                 fi
             fi
         fi
-        
+
         END_TIME=$(date +%s)
         SYNC_DURATION=$((END_TIME - START_TIME))
         msg "Incremental depot sync completed in ${SYNC_DURATION} seconds"
-        
+
         # Show backup size
         DEPOT_SIZE=$(du -sh "${BACKUP_LATEST}/depot" | cut -f1)
         msg "Current depot backup size: ${DEPOT_SIZE}"
@@ -225,13 +212,13 @@ LOG_DIR="/hxlogs/p4/${SDP_INSTANCE}/logs"
 if [[ -d "$LOG_DIR" ]]; then
     # Create a temporary directory with recent logs, then sync it
     TEMP_LOG_DIR=$(mktemp -d)
-    find "$LOG_DIR" -name "*.log" -mtime -7 -exec cp {} "$TEMP_LOG_DIR/" \; 2>/dev/null || true
-    
+    ls "$LOG_DIR"/*.log 2>/dev/null | xargs -I{} cp {} "$TEMP_LOG_DIR/" 2>/dev/null || true
+
     if [[ -n "$(ls -A "$TEMP_LOG_DIR" 2>/dev/null)" ]]; then
         rsync -av "${TEMP_LOG_DIR}/" "${BACKUP_LATEST}/logs/" || warnmsg "Failed to sync log files"
         msg "Synced recent log files"
     fi
-    
+
     rm -rf "$TEMP_LOG_DIR"
 fi
 
@@ -277,7 +264,7 @@ SNAPSHOT_DIR="${BACKUP_SNAPSHOTS}/${CURRENT_MONTH}"
 
 if [[ ! -d "$SNAPSHOT_DIR" ]]; then
     msg "Creating monthly snapshot for ${CURRENT_MONTH}..."
-    
+
     # Use rsync instead of hard links (safer across different filesystems)
     # First try with hard links for efficiency, fall back to full copy
     if cp -al "${BACKUP_LATEST}" "$SNAPSHOT_DIR" 2>/dev/null; then
@@ -290,7 +277,7 @@ if [[ ! -d "$SNAPSHOT_DIR" ]]; then
             warnmsg "Failed to create monthly snapshot"
         fi
     fi
-    
+
     if [[ -d "$SNAPSHOT_DIR" ]]; then
         # Update snapshot manifest
         SNAPSHOT_MANIFEST="${SNAPSHOT_DIR}/snapshot_info.txt"
@@ -303,12 +290,12 @@ Snapshot Type: $(if [[ -f "${SNAPSHOT_DIR}/.snapshot_hardlinked" ]]; then echo "
 
 This snapshot represents the state of the Perforce server on $(date).
 EOF
-        
+
         # Mark if this was a hard-linked snapshot
         if [[ $(stat -c %i "${BACKUP_LATEST}/backup_manifest.txt" 2>/dev/null || echo "0") == $(stat -c %i "${SNAPSHOT_DIR}/backup_manifest.txt" 2>/dev/null || echo "1") ]]; then
             touch "${SNAPSHOT_DIR}/.snapshot_hardlinked"
         fi
-        
+
         # Show snapshot size
         SNAPSHOT_SIZE=$(du -sh "$SNAPSHOT_DIR" | cut -f1)
         msg "Monthly snapshot size: ${SNAPSHOT_SIZE}"
@@ -332,8 +319,8 @@ msg "Cleaning up old monthly snapshots (keeping last ${MONTHLY_SNAPSHOTS} months
 
 if [[ -d "$BACKUP_SNAPSHOTS" ]]; then
     # Keep only the most recent monthly snapshots
-    SNAPSHOTS_TO_DELETE=$(find "${BACKUP_SNAPSHOTS}" -maxdepth 1 -type d -name "20*-*" | sort -r | tail -n +$((MONTHLY_SNAPSHOTS + 1)))
-    
+    SNAPSHOTS_TO_DELETE=$(ls -1d "${BACKUP_SNAPSHOTS}"/20*-* 2>/dev/null | sort -r | tail -n +$((MONTHLY_SNAPSHOTS + 1)))
+
     if [[ -n "$SNAPSHOTS_TO_DELETE" ]]; then
         echo "$SNAPSHOTS_TO_DELETE" | xargs rm -rf
         msg "Cleaned up old monthly snapshots"
@@ -350,7 +337,7 @@ BACKUP_VALID=1
 # Check that key backup components exist
 REQUIRED_COMPONENTS=(
     "${BACKUP_LATEST}/checkpoints"
-    "${BACKUP_LATEST}/journals" 
+    "${BACKUP_LATEST}/journals"
     "${BACKUP_LATEST}/depot"
     "${BACKUP_LATEST}/backup_manifest.txt"
 )
@@ -362,8 +349,7 @@ for component in "${REQUIRED_COMPONENTS[@]}"; do
     fi
 done
 
-# Check that checkpoint file exists and is readable
-CHECKPOINT_FILES=$(find "${BACKUP_LATEST}/checkpoints" -name "checkpoint.${SDP_INSTANCE}.*" -type f 2>/dev/null | wc -l)
+CHECKPOINT_FILES=$(ls "${BACKUP_LATEST}/checkpoints"/p4_${SDP_INSTANCE}.ckp.* 2>/dev/null | wc -l)
 if [[ $CHECKPOINT_FILES -eq 0 ]]; then
     errmsg "No checkpoint files found in backup"
     BACKUP_VALID=0
@@ -373,7 +359,7 @@ fi
 
 # Check that depot has content (if source had content)
 if [[ $DEPOT_FILE_COUNT -gt 0 ]]; then
-    BACKUP_DEPOT_FILES=$(find "${BACKUP_LATEST}/depot" -type f 2>/dev/null | wc -l)
+    BACKUP_DEPOT_FILES=$(ls -1R "${BACKUP_LATEST}/depot" 2>/dev/null | grep -c '^'  || echo 0)
     if [[ $BACKUP_DEPOT_FILES -eq 0 ]]; then
         errmsg "Backup depot is empty but source depot has $DEPOT_FILE_COUNT files"
         BACKUP_VALID=0
@@ -412,7 +398,7 @@ if [[ $ErrorCount -gt 0 ]]; then
     exit 1
 else
     msg "Backup completed with ${WarningCount} warnings"
-    
+
     # Display backup efficiency summary
     msg ""
     msg "=== Backup Efficiency Summary ==="
@@ -423,11 +409,11 @@ else
     msg "✅ Always recoverable: Latest checkpoint + journals + depot"
     msg "✅ Backup verification: $(if [[ $BACKUP_VALID -eq 1 ]]; then echo "PASSED"; else echo "FAILED"; fi)"
     msg "✅ Safe mode: $(if [[ $SAFE_MODE -eq 1 ]]; then echo "ENABLED (recommended)"; else echo "DISABLED (aggressive)"; fi)"
-    
+
     if [[ $BACKUP_VALID -eq 0 ]]; then
         errmsg "Backup completed but failed integrity verification!"
         exit 1
     fi
-    
+ 
     exit 0
 fi
