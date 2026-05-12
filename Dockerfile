@@ -35,7 +35,7 @@ FROM base AS stage1
 COPY --chown=root:root files_for_build/1/* /tmp/
 
 # Specify the SDP version, if SDP_VERSION is empty, the latest SDP will be downloaded.
-ARG SDP_VERSION=2025.1.31674
+ARG SDP_VERSION=2025.2.32234
 
 # Debug: Check what files we have and run setup step by step
 RUN echo "=== Debug: Checking copied files ===" \
@@ -54,7 +54,7 @@ RUN echo "=== Debug: Checking copied files ===" \
 FROM stage1 AS stage2
 
 # P4 binaries version
-ARG P4_VERSION=r25.1
+ARG P4_VERSION=r25.2
 
 # For minimal usage, only p4 and p4d need to be downloaded.
 # Fixed typo: p4ds should be p4d
@@ -76,8 +76,8 @@ FROM stage2 AS final
 
 ARG VCS_REF=unspecified
 ARG BUILD_DATE=unspecified
-ARG SDP_VERSION=2025.1.31674
-ARG P4_VERSION=r25.1
+ARG SDP_VERSION=2025.2.32234
+ARG P4_VERSION=r25.2
 ARG UBUNTU_VERSION=jammy
 
 # Use standard labels instead of deprecated label-schema

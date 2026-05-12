@@ -28,8 +28,8 @@ jobs:
     strategy:
       matrix:
         include:
-        - sdp_version: "2025.1.31674"
-          helix_version: "r25.1"
+        - sdp_version: "2025.2.32234"
+          helix_version: "r25.2"
           ubuntu_version: "jammy"
 
     steps:
