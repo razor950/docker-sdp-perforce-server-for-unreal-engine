@@ -124,7 +124,7 @@ msg "Copied checkpoint: $(basename "$LATEST_CHECKPOINT")"
 msg "Syncing journal files..."
 
 # Sync all journal files from checkpoints dir (where SDP stores them)
-rsync -av --include="p4_${SDP_INSTANCE}.jnl.*" --exclude="*" \
+rsync -a --include="p4_${SDP_INSTANCE}.jnl.*" --exclude="*" \
     "${CHECKPOINT_DIR}/" "${BACKUP_LATEST}/journals/" \
     || warnmsg "Failed to sync journal files from ${CHECKPOINT_DIR}"
 msg "Synced journal files from ${CHECKPOINT_DIR}"
@@ -144,7 +144,7 @@ msg "Incrementally syncing depot files (this will be fast after the first run)..
 DEPOT_DIR="/hxdepots/p4/${SDP_INSTANCE}/depots"
 if [[ -d "$DEPOT_DIR" ]]; then
     # Check if source depot directory has content
-    DEPOT_FILE_COUNT=$(ls -1R "$DEPOT_DIR" 2>/dev/null | grep -c '^'  || echo 0)
+    DEPOT_FILE_COUNT=$(find "$DEPOT_DIR" -type f 2>/dev/null | wc -l)
     msg "Source depot contains $DEPOT_FILE_COUNT files"
 
     if [[ $DEPOT_FILE_COUNT -eq 0 ]]; then
@@ -158,19 +158,19 @@ if [[ -d "$DEPOT_DIR" ]]; then
         fi
     else
         # Use rsync for truly incremental copying - only changed files
-        # Removed --delete flag for safety unless in aggressive mode
+        # --delay-updates writes to temp files first, --delete-delay batches deletions
         START_TIME=$(date +%s)
 
         if [[ $SAFE_MODE -eq 0 ]]; then
-            msg "SAFE_MODE=0: Using aggressive sync with --delete"
-            rsync -av --delete --progress "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" || bail "Failed to incrementally sync depot files"
+            msg "SAFE_MODE=0: Using aggressive sync with --delete-delay"
+            rsync -aWO --delay-updates --delete-delay "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" || bail "Failed to incrementally sync depot files"
         else
             msg "SAFE_MODE=1: Using safe sync without --delete"
-            rsync -av --progress "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" || bail "Failed to incrementally sync depot files"
+            rsync -aWO --delay-updates "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" || bail "Failed to incrementally sync depot files"
 
             # Optional: Show files that would be deleted but weren't
             if [[ -d "${BACKUP_LATEST}/depot" ]]; then
-                ORPHANED_FILES=$(rsync -avn --delete "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" | grep "^deleting " | wc -l)
+                ORPHANED_FILES=$(rsync -an --delete --info=del "${DEPOT_DIR}/" "${BACKUP_LATEST}/depot/" | grep "^deleting " | wc -l)
                 if [[ $ORPHANED_FILES -gt 0 ]]; then
                     msg "Note: $ORPHANED_FILES orphaned files in backup (use BACKUP_SAFE_MODE=0 to auto-delete)"
                 fi
@@ -215,7 +215,7 @@ if [[ -d "$LOG_DIR" ]]; then
     ls "$LOG_DIR"/*.log 2>/dev/null | xargs -I{} cp {} "$TEMP_LOG_DIR/" 2>/dev/null || true
 
     if [[ -n "$(ls -A "$TEMP_LOG_DIR" 2>/dev/null)" ]]; then
-        rsync -av "${TEMP_LOG_DIR}/" "${BACKUP_LATEST}/logs/" || warnmsg "Failed to sync log files"
+        rsync -a "${TEMP_LOG_DIR}/" "${BACKUP_LATEST}/logs/" || warnmsg "Failed to sync log files"
         msg "Synced recent log files"
     fi
 
@@ -271,7 +271,7 @@ if [[ ! -d "$SNAPSHOT_DIR" ]]; then
         msg "Created space-efficient hard-link snapshot: ${SNAPSHOT_DIR}"
     else
         msg "Hard links failed, creating full copy snapshot (this may take time)..."
-        if rsync -av "${BACKUP_LATEST}/" "$SNAPSHOT_DIR/"; then
+        if rsync -a "${BACKUP_LATEST}/" "$SNAPSHOT_DIR/"; then
             msg "Created full copy snapshot: ${SNAPSHOT_DIR}"
         else
             warnmsg "Failed to create monthly snapshot"
@@ -359,7 +359,7 @@ fi
 
 # Check that depot has content (if source had content)
 if [[ $DEPOT_FILE_COUNT -gt 0 ]]; then
-    BACKUP_DEPOT_FILES=$(ls -1R "${BACKUP_LATEST}/depot" 2>/dev/null | grep -c '^'  || echo 0)
+    BACKUP_DEPOT_FILES=$(find "${BACKUP_LATEST}/depot" -type f 2>/dev/null | wc -l)
     if [[ $BACKUP_DEPOT_FILES -eq 0 ]]; then
         errmsg "Backup depot is empty but source depot has $DEPOT_FILE_COUNT files"
         BACKUP_VALID=0

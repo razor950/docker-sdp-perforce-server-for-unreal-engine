@@ -122,9 +122,9 @@ ENV SDP_INSTANCE=1 \
     P4_MASTER_HOST=127.0.0.1 \
     P4_DOMAIN=example.com \
     P4_SSL_PREFIX= \
-    BACKUP_DESTINATION= \
-    BACKUP_RETENTION_WEEKS=52 \
-    BACKUP_SAFE_MODE=1
+    BACKUP_DESTINATION=/backup \
+    BACKUP_RETENTION_WEEKS=12 \
+    BACKUP_SAFE_MODE=0
 
 # Note: We cannot switch to perforce user here since it doesn't exist yet
 # The user will be created when the container starts via setup_container.sh
