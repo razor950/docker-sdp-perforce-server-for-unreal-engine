@@ -46,13 +46,14 @@ CRON_JOB="$CRON_SCHEDULE BACKUP_DESTINATION=${BACKUP_DESTINATION} SDP_INSTANCE=$
 TMP_CRON=$(mktemp)
 trap 'rm -f "$TMP_CRON"' EXIT
 
-# Preserve existing perforce crontab, including SDP maintenance jobs.
 sudo -u perforce crontab -l 2>/dev/null > "$TMP_CRON" || true
 
 if grep -Fq "$BACKUP_SCRIPT" "$TMP_CRON"; then
     echo "Backup cron job already exists for perforce. Leaving existing entry unchanged."
 else
     echo "$CRON_JOB" >> "$TMP_CRON"
+    chown perforce:perforce "$TMP_CRON"
+    chmod 600 "$TMP_CRON"
     sudo -u perforce crontab "$TMP_CRON"
     echo "Scheduled weekly backup cron job for perforce:"
 fi
