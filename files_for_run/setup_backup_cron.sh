@@ -39,7 +39,7 @@ echo "Backup destination verified: $BACKUP_DESTINATION"
 
 # Create backup cron job
 # Run every Sunday at 2:00 AM
-CRON_SCHEDULE="0 2 * * 0"
+CRON_SCHEDULE="0 8 * * 0"
 BACKUP_SCRIPT="/usr/local/bin/p4_backup.sh"
 CRON_JOB="$CRON_SCHEDULE $BACKUP_SCRIPT >> /hxlogs/p4/${SDP_INSTANCE}/logs/backup.log 2>&1"
 
@@ -54,7 +54,7 @@ fi
 (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
 
 echo "Scheduled weekly backup cron job:"
-echo "  Schedule: Every Sunday at 2:00 AM"
+echo "  Schedule: Every Sunday at 8:00 AM"
 echo "  Command: $BACKUP_SCRIPT"
 echo "  Log: /hxlogs/p4/${SDP_INSTANCE}/logs/backup.log"
 

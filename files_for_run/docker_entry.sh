@@ -30,6 +30,18 @@ else
   fi
 fi
 
+# --- Install SDP maintenance crontab for perforce user
+SDP_CRONTAB="/p4/p4.crontab.${SDP_INSTANCE}"
+
+if [[ -f "$SDP_CRONTAB" ]]; then
+  echo "Installing SDP crontab for perforce from $SDP_CRONTAB..."
+  if ! sudo -u perforce crontab "$SDP_CRONTAB"; then
+    echo "Warning: Failed to install SDP crontab for perforce, but continuing startup..." >&2
+  fi
+else
+  echo "Warning: SDP crontab not found: $SDP_CRONTAB" >&2
+fi
+
 # --- Optional backup cron job
 if [[ -n "${BACKUP_DESTINATION:-}" ]]; then
   echo "Setting up backup cron job..."
